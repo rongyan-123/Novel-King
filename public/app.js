@@ -976,7 +976,7 @@ function saveGlobalAppearance() {
 
 function updateSidebarTitle() {
   let text = state.work ? state.work.title : '我的书架';
-  if (!state.workId && (state.view === 'ai-create' || state.view === 'ai')) text = state.view === 'ai' ? 'AI 设置' : 'AI 创作';
+  if (!state.workId && (state.view === 'ai-create' || state.view === 'ai')) text = state.view === 'ai' ? 'AI 中心' : 'AI 创作';
   $('#sidebar-title').textContent = text;
 }
 
@@ -1133,6 +1133,7 @@ function setActiveNav() {
 }
 
 async function renderView() {
+  if (state.view !== 'library' && typeof NovelKingFileLibrary !== 'undefined') NovelKingFileLibrary.dispose();
   if (writingCanvas) { writingCanvas.dispose(); writingCanvas = null; }
   const content = $('#content');
   content.classList.remove('king-workspace');
@@ -1174,14 +1175,14 @@ async function renderView() {
     if (state.view === 'library') {
       setActiveNav();
       updateSidebarTitle();
-      setTopbarTitle('📎 资料库');
+      setTopbarTitle('文件库');
       return renderLibrary(content);
     }
     // 初始页：我的作品（works）与首页 AI 视图（ai-create / ai）可切换
     if (HOME_AI_VIEWS.includes(state.view)) {
       setActiveNav();
       updateSidebarTitle();
-      setTopbarTitle(state.view === 'ai-create' ? '✨ AI 创作' : 'AI 设置');
+      setTopbarTitle(state.view === 'ai-create' ? '✨ AI 创作' : 'AI 中心');
       try {
         await ensureApiConfigs();
         if (state.view === 'ai-create') return renderAICreateHome(content);
@@ -7206,8 +7207,8 @@ async function renderAI(content) {
   content.innerHTML = `
     <div class="page-head">
       <div>
-        <h1 class="page-title">AI 设置 ${helpDot('model_policy')}</h1>
-        <div class="page-sub">API 配置 · OpenViking 记忆库 · 本地创作内核（dsh）· 工具清单</div>
+        <h1 class="page-title">AI 中心 ${helpDot('model_policy')}</h1>
+        <div class="page-sub">配置模型与创作内核，让 AI 成为你的写作助手</div>
       </div>
       <div class="page-actions">
         <button class="btn" data-action="new-api-config">＋ 新建 API 配置</button>
@@ -7245,8 +7246,9 @@ async function renderAI(content) {
         </div>`;
       }).join('') || '<div class="empty">还没有 API 配置</div>'}
     </div>
+    <details class="ai-advanced mt-12"><summary>创作内核 · dsh</summary>${dshCardHtml()}</details>
+    <details class="ai-advanced mt-12"><summary>高级设置与诊断</summary>
     ${openVikingCardHtml()}
-    ${dshCardHtml()}
     ${toolListCardHtml()}
     <div class="card mt-12">
       <div class="card-title">提示</div>
@@ -7258,7 +7260,7 @@ async function renderAI(content) {
         <button class="btn small secondary" data-action="refresh-ai-errors">刷新</button>
       </div>
       <div id="ai-error-history" class="ai-error-history"><span class="muted">加载中...</span></div>
-    </div>`;
+    </div></details>`;
   loadAIErrors();
   // 两张新卡各自异步加载：慢/失败都不阻塞页面渲染（失败也只在自己卡里显示原因）。
   loadOpenVikingStatus();
@@ -11113,6 +11115,12 @@ function renderLibraryDocCard() {
 }
 
 async function renderLibrary(content) {
+  if (state.libraryLegacy) return renderLegacyLibrary(content);
+  return NovelKingFileLibrary.mount(content, { request: api, toast, workId: state.workId, showLegacy: () => { state.libraryLegacy = true; return renderLegacyLibrary(content); }, isActive: () => state.view === 'library' });
+}
+
+async function renderLegacyLibrary(content) {
+  content.classList.remove('fl-root');
   await loadLibrary();
   if (state.view !== 'library') return; // 等待服务端期间视图已切走：过期渲染不得覆盖新页面
   const lib = state.library;
@@ -11131,6 +11139,7 @@ async function renderLibrary(content) {
       <div>
         <h1 class="page-title">📎 资料库</h1>
         <div class="page-sub">跨作品共享的写作参考资料（方法 / 素材 / 范例）：先预览再导入；资料只作参考，不是本书事实</div>
+        <button class="btn secondary small" data-action="library-new">← 返回文件库</button>
         ${helpDot('library')}
       </div>
       <div class="page-actions"><button class="btn secondary" data-action="library-refresh">刷新</button></div>
@@ -13898,6 +13907,11 @@ async function handleAction(action, actionEl, e) {
         state.loadedWorkId = null;
         state.view = 'overview';
         state.currentChapterId = null;
+        await render();
+        break;
+      }
+      case 'library-new': {
+        state.libraryLegacy = false;
         await render();
         break;
       }

@@ -9,6 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { db, withTransaction, inTransaction } from './db.js';
 import { getCanvas, saveCanvas, validateCanvasScene, canvasAIMessages, parseCanvasProposal } from './canvas-store.mjs';
+import { handleFiles } from './file-library.mjs';
 import { isHarnessAvailable, isHarnessBuilt, runHarnessTaskWithProgress, modelSwitchLoad, harnessRuntimeInfo, setHarnessRepoOverride, looksLikeDshRepo } from './harness.js';
 import { readZip } from './zip-reader.mjs';
 import * as ImportGuard from './ai/import/guard.mjs';
@@ -151,10 +152,17 @@ function restoreDatabaseFrom(file) {
   // FTS5 的 shadow tables（*_data、*_idx 等）由虚拟表自己维护，不能直接 DELETE/INSERT；
   // 只恢复业务表与虚拟表本身，完成后通过 rebuild 重建索引。
   const tables = db.prepare("SELECT name, sql FROM sqlite_master WHERE type IN ('table','shadow') AND name NOT LIKE 'sqlite_%' AND name <> 'library_index_fts' AND name NOT LIKE 'library_index_fts_%'").all().map((r) => String(r.name));
+  const preservedFileTables = [];
   try {
     db.exec(`PRAGMA foreign_keys = OFF; ATTACH DATABASE '${escaped}' AS restore_src;`);
+    const sourceTables = new Set(db.prepare("SELECT name FROM restore_src.sqlite_master WHERE type='table'").all().map(row => row.name));
+    const fileTables = ['file_folders', 'file_documents'];
+    // A pre-library database snapshot cannot replace current file metadata.
+    // Preserve both tables together and share any files whose work no longer exists.
+    const preserveFileLibrary = fileTables.some(table => !sourceTables.has(table));
     withTx(() => {
       for (const table of tables) {
+        if (preserveFileLibrary && fileTables.includes(table)) { preservedFileTables.push(table); continue; }
         const q = table.replace(/"/g, '""');
         db.exec(`DELETE FROM "${q}";`);
         const cols = db.prepare(`PRAGMA table_info("${q}")`).all().map((r) => r.name).filter(Boolean);
@@ -163,6 +171,7 @@ function restoreDatabaseFrom(file) {
           db.exec(`INSERT INTO "${q}" (${list}) SELECT ${list} FROM restore_src."${q}";`);
         }
       }
+      for (const table of preservedFileTables) db.exec(`UPDATE "${table}" SET work_id=NULL WHERE work_id IS NOT NULL AND work_id NOT IN (SELECT id FROM works)`);
     });
     db.exec('DETACH DATABASE restore_src; PRAGMA foreign_keys = ON;');
     try { db.exec("INSERT INTO library_index_fts(library_index_fts) VALUES ('rebuild')"); } catch (_) { /* 没有资料库 FTS 时忽略 */ }
@@ -170,7 +179,7 @@ function restoreDatabaseFrom(file) {
     try { db.exec('DETACH DATABASE restore_src; PRAGMA foreign_keys = ON;'); } catch (_) {}
     throw new Error(`还原失败（当前库未替换）：${e.message}`);
   }
-  return { ok: true, restored_from: file, safety_backup: safety, integrity: 'ok', size: checked.size, sha256: checked.sha256 };
+  return { ok: true, restored_from: file, safety_backup: safety, integrity: 'ok', size: checked.size, sha256: checked.sha256, file_library_preserved: preservedFileTables.length > 0 };
 }
 
 // ── 模型侧写入的审批边界（2026-09-27，R02.2）──────────────────────────────────
@@ -1112,7 +1121,7 @@ const AI_REQUEST_TIMEOUT_MS = LONG_AI_TIMEOUT_MS;
 // confirm / bootstrap 是作者动作，模型侧 403；确认前不写任何正式状态）。PUT /api/novel/state/temporal 启用
 // 改为迁移门禁（缺表/缺索引 → 503，不吞错误继续跑），启用即登记迁移版本，响应新增 migration 与首次启用的
 // enable_scope（预算 + 待重建范围）；未开启作品不触发额外模型调用、旧上下文不变；插件工具/端点面不变，无新表。
-const HOST_CONTRACT_VERSION = '1.21.0';
+const HOST_CONTRACT_VERSION = '1.22.0';
 
 // 调用 OpenAI 兼容的 Chat Completions 接口，带超时与 URL 自动回退。
 async function callAI(config, messages, options = {}) {
@@ -5246,6 +5255,8 @@ async function handleAPI(req, res, pathname, query) {
   }
 
   // ---------- 🐞 运行追踪（调试录制） ----------
+  if (resource === 'files') return handleFiles({ req, res, segments, query, db, dataDir: DATA_DIR, agent: isAgentRequest(req), sendJSON, readBody });
+
   // 本组接口自身不参与追踪（debug-trace 的 isExcludedPath 排除 /api/debug），
   // 否则「查看追踪」这个动作会不断产生新的追踪数据。
   if (resource === 'debug') {

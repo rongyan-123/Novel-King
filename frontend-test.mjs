@@ -1840,6 +1840,7 @@ check('58b 菜单里不再出现旧名，AI 标签仍是内部键 st', P.AI_TABS
 // 开关按作品、默认关闭；模型侧写操作一律 403（后端职责，此处断言界面不越权、不假装能写）。
 {
   const savedLibState = {
+    libraryLegacy: P.state.libraryLegacy,
     workId: P.state.workId, work: P.state.work, view: P.state.view, chapters: P.state.chapters,
     library: P.state.library, libraryLoaded: P.state.libraryLoaded, libraryKey: P.state.libraryKey, libraryDir: P.state.libraryDir,
     libraryCategory: P.state.libraryCategory, librarySearch: P.state.librarySearch,
@@ -1854,6 +1855,7 @@ check('58b 菜单里不再出现旧名，AI 标签仍是内部键 st', P.AI_TABS
   P.state.library = null; P.state.libraryLoaded = false;
   P.state.libraryDir = ''; P.state.libraryCategory = ''; P.state.librarySearch = null;
   P.state.libraryDoc = null; P.state.libraryPlan = null; P.state.libraryImportResult = null;
+  P.state.libraryLegacy = true; // The original library remains available via the advanced entry.
   libraryStub.enabled = false; libraryStub.ov.disabled = false; libraryStub.docReads = [];
 
   P.goView('library');

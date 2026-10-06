@@ -940,6 +940,37 @@ CREATE TABLE IF NOT EXISTS import_rebuild_batches (
 );
 CREATE INDEX IF NOT EXISTS idx_import_rebuild_batches_run ON import_rebuild_batches(run_id, batch_index);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_import_rebuild_batches_uq ON import_rebuild_batches(run_id, batch_index);
+-- 文件库（2026-10-06）：独立原件 + 手动目录；提取文本仅作资料，不写入小说正典。
+CREATE TABLE IF NOT EXISTS file_folders (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  area TEXT NOT NULL,
+  work_id INTEGER REFERENCES works(id) ON DELETE SET NULL,
+  parent_id TEXT REFERENCES file_folders(id),
+  kind TEXT NOT NULL DEFAULT 'folder',
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS file_documents (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  original_name TEXT NOT NULL DEFAULT '',
+  area TEXT NOT NULL,
+  work_id INTEGER REFERENCES works(id) ON DELETE SET NULL,
+  folder_id TEXT REFERENCES file_folders(id),
+  size INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  extracted_text TEXT NOT NULL DEFAULT '',
+  text_length INTEGER,
+  read_status TEXT NOT NULL,
+  read_error TEXT NOT NULL DEFAULT '',
+  deleted_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_files_location ON file_documents(area, work_id, folder_id, deleted_at);
+CREATE INDEX IF NOT EXISTS idx_file_folders_parent ON file_folders(parent_id);
+
 -- 共享资料库登记表（2026-09-28，library）：作者显式导入的参考资料（跨作品共享）。
 -- 边界：这里是**登记表**，不是事实表——资料永不进入正典事实/事件/角色知识；
 -- uri 唯一（重导即按 uri 更新）；删除策略默认只改 status='marked_missing'（作者确认后才删行）。
@@ -1200,6 +1231,8 @@ try {
 
 // 兼容旧数据库：给已存在的表补充新增列；「列已存在」是预期情况静默跳过，其余错误告警（不再全吞）。
 const MIGRATIONS = [
+  `ALTER TABLE file_documents ADD COLUMN original_name TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE file_documents ADD COLUMN text_length INTEGER`,
   `ALTER TABLE works ADD COLUMN author_note TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE chapters ADD COLUMN author_note TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE characters ADD COLUMN mes_example TEXT NOT NULL DEFAULT ''`,

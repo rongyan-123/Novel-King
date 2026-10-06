@@ -1,4 +1,6 @@
-# Host Contract 1.21.0（宿主契约 · 冻结）
+# Host Contract 1.22.0（宿主契约 · 冻结）
+
+Novel-King 1.22.0（2026-10-06）附加文件库：新增 `file_folders` 与 `file_documents`，原件以 UUID 保存到数据目录的 `file-library/`，SQLite 保留目录、归属、原文件名、全文与回收站状态。新增 `/api/files` 列表/搜索、`/status` 概况、`/folders` 手动目录操作、`/upload` 原件上传、`/:id/text` 分页阅读、`/:id/original` 下载、`/:id/preview` 图片预览、`/:id` 用户改名/移动/移入回收站和 `/:id/restore` 恢复。模型通道只允许指定作品或共享范围的 GET；写入一律 403。上传不修改作品章节、角色或正典；不依赖 OpenViking。完整备份需同时保存数据库与原件目录，既有 SQLite 备份接口仍只备份数据库。未启动新增 Agent 任务，插件工具面与生成预算保持兼容。详见 `docs/file-library.md`。
 
 Novel-King 1.21.0（2026-10-06）附加剧情画布：新增 `work_canvases`（作品外键删除级联、完整场景 JSON、版本号与更新时间）。新增 `GET /api/canvas?work_id=`、作者侧 `PUT /api/canvas?work_id=`（要求匹配 revision，冲突 409）、只读 `POST /api/canvas/validate?work_id=`（导入预检）、`POST /api/ai/canvas`（完整场景与本作品资料，可选识图图片，结果不写入）。画布计划不进入正典事实；作者确认后只更新画布。旧库冻结表及指纹、原有插件工具面维持兼容。
 
@@ -8,7 +10,7 @@ Novel-King 1.21.0（2026-10-06）附加剧情画布：新增 `work_canvases`（�
 >
 > - 机读契约面（由真实代码导出，不是手抄）：`docs/host-contract.v1.json`
 > - 契约测试（离线、零计费）：`node .p1-baseline/test-host-contract.mjs`
-> - 版本：**host-contract 1.20.0**（`HOST_CONTRACT_VERSION` 在 `server.js`；`GET /api/novel/ping` 会回报它）
+> - 版本：**host-contract 1.22.0**（`HOST_CONTRACT_VERSION` 在 `server.js`；`GET /api/novel/ping` 会回报它）
 > - 1.0.0 冻结于 **2026-09-25**（依据：`docs/main-v2-acceptance-2026-09-25.md` 的 A PASS 验收结论）
 > - 1.1.0 冻结于 **2026-09-26**（**附加式**扩展：确定性故事状态内核；预算常量、层顺序、默认生成路径均未变，逐字节基线 50/50 复验。见 §13）
 > - 1.2.0 冻结于 **2026-09-26**（**附加式**：只读事实端点 `GET /api/novel/state/facts`；并修正派生视图的章序展示——内部 0 基下标，展示一律 +1。见 §13）
@@ -165,7 +167,7 @@ Novel-King 1.21.0（2026-10-06）附加剧情画布：新增 `work_canvases`（�
 | **错误码** | 无（DB 层错误由 API 层转成 4xx/5xx） |
 | **retryable** | 写冲突由 `busy_timeout` 吸收；业务层不重试 |
 | **兼容策略** | **只增不减**：`CREATE TABLE IF NOT EXISTS` + `try ALTER TABLE ... ADD COLUMN`（列已存在即忽略）；**绝不** `DROP TABLE` / `DROP COLUMN` / `RENAME` / 删除用户数据 |
-| **版本** | 1.20.0（累计 72 张表；1.0.0 冻结的 25 张旧表零结构改动，新增表全部是新表） |
+| **版本** | 1.22.0（累计 75 张表；1.0.0 冻结的 25 张旧表零结构改动，新增表全部是新表） |
 | **不变条件** | ① 旧作品/旧章节/旧记忆继续可打开；② 对旧库零 schema 写入、零数据删除（验收实测：`sqlite_master` 指纹 `3cb7e5d9ac4f67b9` 前后一致）；③ 新增表全部是**新表**，不改旧表结构；`story_state_config.enabled` 对既有作品默认 `0`（未开启 = 行为与 1.0.0 完全一致） |
 | **可观测字段** | `sqlite_master`（表/索引/视图/触发器）、关键表行数 |
 | **不可绕过** | 插件不得直接读写 `novel.db`（含 `-wal` / `-shm`）；不得要求宿主"顺手"改字段 |

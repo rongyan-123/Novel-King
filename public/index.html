@@ -9,6 +9,7 @@
     NovelKingAppearance.apply(document, NovelKingAppearance.read(localStorage), matchMedia('(prefers-color-scheme: dark)').matches);
   </script>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/file-library.css">
 </head>
 <body>
   <div id="app">
@@ -21,8 +22,8 @@
       <nav class="sidebar-nav" id="sidebar-nav">
         <div class="nav-section-label" data-nav-section="global">创作</div>
         <button data-view="works" data-nav-section="global" title="管理作品与继续写作">▤ <span>我的书架</span></button>
-        <button data-view="library" data-nav-section="global" title="管理跨作品使用的参考资料">▱ <span>参考资料</span></button>
-        <button data-view="ai" data-nav-section="global" title="配置模型与 API">⚙ <span>AI 设置</span></button>
+        <button data-view="library" data-nav-section="global" title="上传、阅读与整理写作资料">▱ <span>文件库</span></button>
+        <button data-view="ai" data-nav-section="global" title="模型、运行时与 AI 工具">⚙ <span>AI 中心</span></button>
         <div class="nav-section-label" data-nav-section="workspace">作品空间</div>
         <button data-view="writing" data-nav-section="workspace" title="写正文与画大纲：左侧章节目录，右侧角色、设定与 AI 工具">✍ <span>写作台</span></button>
         <button data-view="settings" data-nav-section="workspace" title="管理角色、世界观和设定">♙ <span>角色与设定</span></button>
@@ -60,6 +61,7 @@
   <div id="ai-task-progress" class="ai-task-progress" hidden></div>
   <script src="/long-text.js"></script>
   <script src="/writing-workspace.js"></script>
+  <script src="/file-library.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
