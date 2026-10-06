@@ -165,7 +165,13 @@ function restoreDatabaseFrom(file) {
         if (preserveFileLibrary && fileTables.includes(table)) { preservedFileTables.push(table); continue; }
         const q = table.replace(/"/g, '""');
         db.exec(`DELETE FROM "${q}";`);
-        const cols = db.prepare(`PRAGMA table_info("${q}")`).all().map((r) => r.name).filter(Boolean);
+        let cols = db.prepare(`PRAGMA table_info("${q}")`).all().map((r) => r.name).filter(Boolean);
+        if (fileTables.includes(table)) {
+          // Older file-library snapshots have no editor columns. Omit those
+          // destination columns so SQLite supplies NULL / revision 0 defaults.
+          const sourceColumns = new Set(db.prepare(`PRAGMA restore_src.table_info("${q}")`).all().map(row => row.name));
+          cols = cols.filter(column => sourceColumns.has(column));
+        }
         if (cols.length) {
           const list = cols.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
           db.exec(`INSERT INTO "${q}" (${list}) SELECT ${list} FROM restore_src."${q}";`);
@@ -1121,7 +1127,7 @@ const AI_REQUEST_TIMEOUT_MS = LONG_AI_TIMEOUT_MS;
 // confirm / bootstrap 是作者动作，模型侧 403；确认前不写任何正式状态）。PUT /api/novel/state/temporal 启用
 // 改为迁移门禁（缺表/缺索引 → 503，不吞错误继续跑），启用即登记迁移版本，响应新增 migration 与首次启用的
 // enable_scope（预算 + 待重建范围）；未开启作品不触发额外模型调用、旧上下文不变；插件工具/端点面不变，无新表。
-const HOST_CONTRACT_VERSION = '1.22.0';
+const HOST_CONTRACT_VERSION = '1.23.0';
 
 // 调用 OpenAI 兼容的 Chat Completions 接口，带超时与 URL 自动回退。
 async function callAI(config, messages, options = {}) {

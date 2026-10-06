@@ -962,6 +962,8 @@ CREATE TABLE IF NOT EXISTS file_documents (
   sha256 TEXT NOT NULL,
   extracted_text TEXT NOT NULL DEFAULT '',
   text_length INTEGER,
+  edited_html TEXT,
+  content_revision INTEGER NOT NULL DEFAULT 0,
   read_status TEXT NOT NULL,
   read_error TEXT NOT NULL DEFAULT '',
   deleted_at TEXT,
@@ -1233,6 +1235,8 @@ try {
 const MIGRATIONS = [
   `ALTER TABLE file_documents ADD COLUMN original_name TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE file_documents ADD COLUMN text_length INTEGER`,
+  `ALTER TABLE file_documents ADD COLUMN edited_html TEXT`,
+  `ALTER TABLE file_documents ADD COLUMN content_revision INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE works ADD COLUMN author_note TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE chapters ADD COLUMN author_note TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE characters ADD COLUMN mes_example TEXT NOT NULL DEFAULT ''`,

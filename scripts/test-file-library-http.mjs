@@ -173,3 +173,80 @@ test('升级前的 SQLite 备份仍能还原；未包含文件库的旧备份不
   assert.equal((await request('/files/status')).body.total_files, baseline);
   assert.equal((await fetch(base + `/files/${original.id}/original`)).status, 200);
 });
+
+test('文件库小说卡片统计只属于各自小说，共享文件单独计数', async () => {
+  const sharedBefore = (await request('/files?scope=shared')).body.total;
+  const first = (await request('/works', 'POST', { title: '镜城资料测试' })).body;
+  const second = (await request('/works', 'POST', { title: '星海资料测试' })).body;
+  await upload('相同设定.txt', '镜城设定', { work_id: first.id });
+  const deleted = (await upload('回收设定.txt', '回收内容', { work_id: first.id })).body;
+  await request(`/files/${deleted.id}`, 'DELETE');
+  await upload('相同设定.txt', '星海设定', { work_id: second.id });
+  await upload('星海大纲.txt', '星海大纲', { work_id: second.id, area: 'outline' });
+  const sharedFile = (await upload('共享技法.txt', '通用资料', { area: 'craft' })).body;
+  const status = (await request('/files/status')).body;
+  assert.equal(status.works.find(row => row.id === first.id).total_files, 1);
+  assert.equal(status.works.find(row => row.id === second.id).total_files, 2);
+  assert.equal(status.shared_files, sharedBefore + 1);
+  assert.equal((await request(`/files/status?work_id=${first.id}`)).body.total_files, 1);
+  assert.equal((await request(`/files?work_id=${first.id}&q=星海`)).body.total, 0);
+  // Leave the fixture in the recycle bin after verifying its active-file counts.
+  for (const owner of [first.id, second.id]) {
+    for (const file of (await request(`/files?work_id=${owner}`)).body.files) await request(`/files/${file.id}`, 'DELETE');
+  }
+  await request(`/files/${sharedFile.id}`, 'DELETE');
+});
+
+test('编辑上传资料保留格式、更新全文检索，原件不变且重启后保留编辑稿', async () => {
+  const original = docxFixture();
+  const file = (await upload('可编辑设定.docx', original, { work_id: work.id })).body;
+  const read = await request(`/files/${file.id}/edit?work_id=${work.id}`);
+  assert.equal(read.status, 200);
+  assert.equal(read.body.html, null);
+  assert.equal(read.body.revision, 0);
+  assert.ok(read.body.text.includes('主角找到了镜子'));
+  const edit = { html: '<h2>镜城</h2><p><b>新增能力</b>：读取梦境。</p>', text: '镜城\n新增能力：读取梦境。', revision: 0 };
+  const saved = await request(`/files/${file.id}/content?work_id=${work.id}`, 'PUT', edit);
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.revision, 1);
+  assert.equal((await request(`/files?work_id=${work.id}&q=读取梦境`)).body.files[0].id, file.id);
+  await stop(); await start();
+  const reread = (await request(`/files/${file.id}/edit?work_id=${work.id}`)).body;
+  assert.equal(reread.html, edit.html);
+  assert.equal(reread.text, edit.text);
+  assert.equal(reread.revision, 1);
+  assert.deepEqual(Buffer.from(await (await fetch(base + `/files/${file.id}/original?work_id=${work.id}`)).arrayBuffer()), original);
+  assert.equal((await request(`/files/${file.id}/text?work_id=${work.id}`, 'GET', null, true)).body.text, edit.text);
+  assert.equal((await request(`/files/${file.id}/content?work_id=${work.id}`, 'PUT', { ...edit, text: '过期稿' })).status, 409);
+  assert.equal((await request(`/files/${file.id}/edit?work_id=${work.id}`)).body.text, edit.text);
+  assert.equal((await request(`/files/${file.id}/content?scope=shared`, 'PUT', { ...edit, revision: 1 })).status, 404);
+  assert.equal((await request(`/files/${file.id}/content?work_id=${work.id}`, 'PUT', { ...edit, revision: 1 }, true)).status, 403);
+  assert.equal((await request(`/files/${file.id}/content`, 'PUT', { ...edit, revision: 1 })).status, 400);
+  assert.equal((await request(`/files/${file.id}/content?work_id=${work.id}`, 'PUT', { html: 123, text: '坏请求', revision: 1 })).status, 400);
+  const image = (await upload('预览图片.png', Buffer.from([137,80,78,71,13,10,26,10]), { work_id: work.id })).body;
+  assert.equal((await request(`/files/${image.id}/edit?work_id=${work.id}`)).body.editable, false);
+  assert.equal((await request(`/files/${image.id}/content?work_id=${work.id}`, 'PUT', edit)).status, 415);
+  const empty = (await upload('空设定.txt', '', { work_id: work.id })).body;
+  assert.equal((await request(`/files/${empty.id}/content?work_id=${work.id}`, 'PUT', { html: '<p>新设定</p>', text: '新设定', revision: 0 })).status, 200);
+  const emptyText = (await request(`/files/${empty.id}/text?work_id=${work.id}`)).body;
+  assert.equal(emptyText.text, '新设定');
+  assert.equal(emptyText.read_status, 'ready');
+  for (const id of [file.id, image.id, empty.id]) await request(`/files/${id}`, 'DELETE');
+});
+
+test('还原包含文件库但尚无编辑稿字段的旧备份，原件和文字可继续编辑', async () => {
+  const file = (await upload('旧版本资料.txt', '旧版本的原始设定', { work_id: work.id })).body;
+  const backup = (await request('/backup', 'POST', { label: 'pre-file-editor-schema' })).body.backup;
+  const fixture = new DatabaseSync(backup.path);
+  fixture.exec('ALTER TABLE file_documents DROP COLUMN edited_html; ALTER TABLE file_documents DROP COLUMN content_revision;');
+  fixture.close();
+  await request(`/files/${file.id}/content?work_id=${work.id}`, 'PUT', { html: '<p>新的编辑稿</p>', text: '新的编辑稿', revision: 0 });
+  const restored = await request('/backup/restore', 'POST', { path: backup.path });
+  assert.equal(restored.status, 200, restored.body.error);
+  const read = (await request(`/files/${file.id}/edit?work_id=${work.id}`)).body;
+  assert.equal(read.text, '旧版本的原始设定');
+  assert.equal(read.html, null);
+  assert.equal(read.revision, 0);
+  assert.equal((await request(`/files/${file.id}/content?work_id=${work.id}`, 'PUT', { html: '<p>继续编辑</p>', text: '继续编辑', revision: 0 })).status, 200);
+  assert.equal(await (await fetch(base + `/files/${file.id}/original?work_id=${work.id}`)).text(), '旧版本的原始设定');
+});

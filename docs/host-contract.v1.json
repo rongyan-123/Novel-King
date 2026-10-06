@@ -1,6 +1,6 @@
 {
   "$comment": "Host Contract 的可机读契约面（由真实代码导出，不是手抄）。任何字段的变化都必须走主体变更流程：改代码 → 改本文件 → 改 docs/host-contract.md → 跑 .p1-baseline/test-host-contract.mjs。",
-  "host_contract": "1.22.0",
+  "host_contract": "1.23.0",
   "frozen_at": "2026-10-06",
   "host": {
     "service": "novel-studio",
@@ -990,6 +990,11 @@
       "version": "1.22.0",
       "frozen_at": "2026-10-06",
       "note": "Novel-King 附加文件库：file_folders/file_documents 保存目录、归属、全文与回收站；原件按 UUID 保存。/api/files 支持作者手动上传、整理、阅读、下载和恢复；模型只允许指定范围的 GET，写入 403。独立于 OpenViking 与作品正典，未启动新 Agent 任务；插件工具、上下文层和预算不变。"
+    },
+    {
+      "version": "1.23.0",
+      "frozen_at": "2026-10-06",
+      "note": "Novel-King 小说资料工作台：文件库按小说卡片进入，各小说统计 total_files/books，共享单独统计。file_documents 附加 edited_html/content_revision；GET /api/files/:id/edit 与 /export 读取编辑稿及文字下载；作者 PUT /api/files/:id/content 显式限定小说/共享范围，过期版本 409，模型写入 403。编辑更新可检索文字且保留上传原件，独立于小说章节；正文编辑格式复用，插件工具、上下文层和预算不变。"
     }
   ]
 }

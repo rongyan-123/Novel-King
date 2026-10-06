@@ -36,8 +36,10 @@ async function extractDocument(original, extension) {
   } finally { const next = parseWaiters.shift(); if (next) next(); else parsing--; }
 }
 const fail = (message, status = 400) => { throw Object.assign(Error(message), { status }); };
-const publicFile = ({ extracted_text, ...metadata }) => ({ ...metadata, text_length: extracted_text.length });
-const FILE_METADATA_COLUMNS = 'id,name,original_name,area,work_id,folder_id,size,sha256,read_status,read_error,deleted_at,created_at,updated_at,text_length';
+const publicFile = ({ extracted_text, edited_html, ...metadata }) => ({ ...metadata, text_length: extracted_text.length, has_edits: edited_html !== null,
+  read_status: edited_html !== null ? 'ready' : metadata.read_status, read_error: edited_html !== null ? '' : metadata.read_error });
+const FILE_METADATA_COLUMNS = "id,name,original_name,area,work_id,folder_id,size,sha256,CASE WHEN edited_html IS NOT NULL THEN 'ready' ELSE read_status END AS read_status,CASE WHEN edited_html IS NOT NULL THEN '' ELSE read_error END AS read_error,deleted_at,created_at,updated_at,text_length,content_revision,edited_html IS NOT NULL AS has_edits";
+const editableFile = file => file.edited_html !== null || file.read_status === 'ready' || /\.(txt|md|markdown)$/i.test(file.original_name || file.name);
 const validName = value => {
   const name = typeof value === 'string' ? value.trim() : '';
   if (!name || name.length > 240 || /[\\/\x00-\x1f]/.test(name) || ['.', '..'].includes(name)) fail('名称需为 1–240 字，不能包含路径或控制字符');
@@ -80,6 +82,30 @@ export async function handleFiles({ req, res, segments, query, db, dataDir, agen
       if (!row) fail('资料不存在或不在当前范围内', 404);
       return row;
     };
+    if (method === 'GET' && detail === 'edit') {
+      const file = lookup('file_documents', action);
+      if (file.deleted_at) fail('资料已在回收站', 404);
+      return respond(200, { ...publicFile(file), html: file.edited_html, text: file.extracted_text, revision: file.content_revision, editable: editableFile(file) });
+    }
+    if (method === 'PUT' && detail === 'content') {
+      if (!workId && query.scope !== 'shared') fail('保存资料必须指定所属小说或共享范围');
+      const file = lookup('file_documents', action);
+      if (file.deleted_at) fail('请先从回收站恢复资料', 409);
+      if (!editableFile(file)) fail('此文件没有可编辑的文字，请上传文字版；原件可下载', 415);
+      const body = await jsonBody();
+      if (typeof body.html !== 'string' || typeof body.text !== 'string' || !Number.isSafeInteger(body.revision) || body.revision < 0) fail('编辑稿需要 HTML、文字和有效版本号');
+      if (Buffer.byteLength(body.html) > MAX_BYTES || Buffer.byteLength(body.text) > MAX_BYTES) fail('编辑稿不能超过 20 MB', 413);
+      const saved = db.prepare("UPDATE file_documents SET edited_html=?,extracted_text=?,text_length=?,content_revision=content_revision+1,updated_at=datetime('now') WHERE id=? AND content_revision=?").run(body.html, body.text, body.text.length, file.id, body.revision);
+      if (!saved.changes) fail('资料已在其他窗口更新；你的编辑稿已保留，请下载后重新打开最新版本', 409);
+      return respond(200, { ...publicFile(db.prepare('SELECT * FROM file_documents WHERE id=?').get(file.id)), revision: body.revision + 1 });
+    }
+    if (method === 'GET' && detail === 'export') {
+      const file = lookup('file_documents', action);
+      if (file.deleted_at) fail('资料已在回收站', 404);
+      const text = Buffer.from(file.extracted_text, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': `attachment; filename="notes.txt"; filename*=UTF-8''${encodeURIComponent(file.name.replace(/\.[^.]+$/, '') + '.txt')}`, 'X-Content-Type-Options': 'nosniff', 'Content-Length': text.length });
+      return res.end(text);
+    }
     if (!action && method === 'GET') {
       const folders = db.prepare(`SELECT * FROM file_folders WHERE 1=1${scope} ORDER BY created_at, name`).all(...values);
       const filter = [], parameters = [...values];
@@ -99,12 +125,16 @@ export async function handleFiles({ req, res, segments, query, db, dataDir, agen
         const canvas = db.prepare('SELECT scene_json FROM work_canvases WHERE work_id=?').get(work.id);
         let canvasNodes = 0;
         if (canvas) try { canvasNodes = JSON.parse(canvas.scene_json).elements.filter(node => !node.isDeleted).length; } catch {}
-        return { ...work, chapters: db.prepare('SELECT count(*) AS count FROM chapters WHERE work_id=?').get(work.id).count,
+        return { ...work, total_files: db.prepare('SELECT count(*) AS count FROM file_documents WHERE work_id=? AND deleted_at IS NULL').get(work.id).count,
+          books: db.prepare("SELECT count(*) AS count FROM file_folders WHERE work_id=? AND kind='book'").get(work.id).count,
+          chapters: db.prepare('SELECT count(*) AS count FROM chapters WHERE work_id=?').get(work.id).count,
           characters: db.prepare('SELECT count(*) AS count FROM characters WHERE work_id=?').get(work.id).count,
           settings: db.prepare('SELECT count(*) AS count FROM terms WHERE work_id=?').get(work.id).count + db.prepare('SELECT count(*) AS count FROM world_entries WHERE work_id=?').get(work.id).count,
           recent_chapter: db.prepare('SELECT id,title,updated_at FROM chapters WHERE work_id=? ORDER BY updated_at DESC LIMIT 1').get(work.id) || null, canvas_nodes: canvasNodes };
       });
-      return respond(200, { areas: FILE_AREAS.map(area => ({ ...area, count: counts.find(row => row.area === area.id)?.count || 0 })), total_files: counts.reduce((sum, row) => sum + row.count, 0), books: db.prepare(`SELECT count(*) AS count FROM file_folders WHERE kind='book'${scope}`).get(...values).count, works });
+      return respond(200, { areas: FILE_AREAS.map(area => ({ ...area, count: counts.find(row => row.area === area.id)?.count || 0 })), total_files: counts.reduce((sum, row) => sum + row.count, 0), books: db.prepare(`SELECT count(*) AS count FROM file_folders WHERE kind='book'${scope}`).get(...values).count, works,
+        ...(!workId && !query.scope ? { shared_files: db.prepare('SELECT count(*) AS count FROM file_documents WHERE work_id IS NULL AND deleted_at IS NULL').get().count,
+          shared_books: db.prepare("SELECT count(*) AS count FROM file_folders WHERE work_id IS NULL AND kind='book'").get().count } : {}) });
     }
     if (action === 'folders' && method === 'POST') {
       const body = await jsonBody();

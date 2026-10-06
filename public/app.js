@@ -1089,6 +1089,7 @@ async function loadWorkData(force = false) {
 // 注意：这里只剩"输入法组字中 / 409 真冲突"两种拦人状态（见 flushSave）；空内容暂停
 // 与保存失败都不再阻止导航 —— 它们是提示与出路问题，不是"不许走"问题。
 async function ensureSavedBeforeNavigation() {
+  if (typeof NovelKingFileLibrary !== 'undefined' && !(await NovelKingFileLibrary.flush())) return false;
   if (writingCanvas && !(await writingCanvas.flush())) return false;
   const ok = await flushSave();
   if (!ok) {
@@ -11116,7 +11117,13 @@ function renderLibraryDocCard() {
 
 async function renderLibrary(content) {
   if (state.libraryLegacy) return renderLegacyLibrary(content);
-  return NovelKingFileLibrary.mount(content, { request: api, toast, workId: state.workId, showLegacy: () => { state.libraryLegacy = true; return renderLegacyLibrary(content); }, isActive: () => state.view === 'library' });
+  return NovelKingFileLibrary.mount(content, { request: api, toast, workId: state.workId,
+    editor: { sanitize: sanitizeEditorHtml, fromText: textToParagraphsHtml, format: (editor, format) => {
+      if (['B', 'I', 'U'].includes(format)) applyInlineFormat(format, editor);
+      else if (['H2', 'BLOCKQUOTE'].includes(format)) applyBlockFormat(format, editor);
+      else { editor.focus(); document.execCommand(format, false, null); }
+    } },
+    showLegacy: () => { state.libraryLegacy = true; return renderLegacyLibrary(content); }, isActive: () => state.view === 'library' });
 }
 
 async function renderLegacyLibrary(content) {
@@ -13591,8 +13598,7 @@ function insertTermLink(termId) {
 
 // ---------- 编辑器格式（F-36：替代已弃用的 document.execCommand） ----------
 // 行内格式（加粗/斜体/下划线）用 Selection/Range 手动包裹；块级格式（H2/引用）替换选区所在块。
-function applyInlineFormat(tag) {
-  const editor = $('#editor-content');
+function applyInlineFormat(tag, editor = $('#editor-content')) {
   if (!editor) return;
   editor.focus();
   const sel = window.getSelection();
@@ -13608,8 +13614,7 @@ function applyInlineFormat(tag) {
   sel.addRange(range);
 }
 
-function applyBlockFormat(tag) {
-  const editor = $('#editor-content');
+function applyBlockFormat(tag, editor = $('#editor-content')) {
   if (!editor) return;
   editor.focus();
   const sel = window.getSelection();
