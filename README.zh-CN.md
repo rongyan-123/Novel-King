@@ -1,11 +1,13 @@
-# Novel Studio · 小说创作工坊
+# Novel-King · 小说创作工作台
+
+本仓库基于 Novel Studio 开发，新增沉浸式写作界面与持久化剧情画布。画布操作、章节关联、AI 剧情图与构建方式见 [使用说明](docs/novel-king-canvas.md)。其余基础能力与上游历史说明保留在下方。
 
 [**English**](README.md) · **简体中文**
 
 [![CI](https://github.com/bbaz123/novel-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/bbaz123/novel-studio/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node.js ≥ 22.13](https://img.shields.io/badge/node-%E2%89%A5%2022.13-3c873a?logo=node.js&logoColor=white)](https://nodejs.org)
-[![npm dependencies: 0](https://img.shields.io/badge/npm%20dependencies-0-brightgreen)](package.json)
+[![canvas: Excalidraw](https://img.shields.io/badge/canvas-Excalidraw-6965db)](docs/novel-king-canvas.md)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#-安装与运行详细步骤)
 [![data: 100% local](https://img.shields.io/badge/data-100%25%20local-blue)](#-数据与隐私)
 [![model: DeepSeek V4.1 Flash](https://img.shields.io/badge/model-DeepSeek%20V4.1%20Flash-4d6bfe)](ai/policy.mjs)
@@ -15,7 +17,7 @@
 
 **长篇不是在第 3 章崩的，是在第 40 章崩的。** 第 12 章写「李队」、第 40 章变成「李队长」；第 3 章已经死掉的配角重新出场；埋的线到完结都没人回收。对话式 AI 能写出漂亮的段落，却会把情节线丢掉，而且**更长的提示词治不了这个病**。
 
-Novel Studio 把它做成**确定性、可检查的机制**：本机跑一个 Node.js 服务，整座书库就是一个 SQLite 文件，**零 npm 依赖**——不用 `npm install`、不用注册账号、不连云、不订阅。
+Novel Studio 把它做成**确定性、可检查的机制**：本机跑一个 Node.js 服务，整座书库就是一个 SQLite 文件。Novel-King 新增固定版本的 Excalidraw 与 React 前端依赖，仓库包含构建资产，普通启动无需重新构建；修改画布源码时执行 `npm ci` 和 `npm run build:canvas`。
 
 > **完全不接 AI 也能用。** 纯手写、设定管理、大纲与导出开箱即用、零费用；AI（DeepSeek 或任意 OpenAI 兼容服务商）是可选项，只在你打开开关的功能里才用。
 
@@ -45,7 +47,7 @@ Novel Studio 把它做成**确定性、可检查的机制**：本机跑一个 No
 
 > 📌 版本 **v1.1.1**（实验版 · 强化版）。本仓库的**默认分支 `Experimental-Version-v1.0` 就是当前开发线**；`refactor/p0-p6` 保留上一版（v0.9.6），`main` 保留重构前的旧版（v0.9.3）。安装方式与项目结构一律以本页为准，收尾说明见 [Release v1.1.1](https://github.com/bbaz123/novel-studio/releases/tag/v1.1.1)。
 >
-> 🔎 **English keywords**：local-first AI novel writing studio / novel writing software · AI writing assistant · AI 小说写作软件 · Chinese web novel (网文) / long-form fiction · character consistency & foreshadowing tracker · worldbuilding tool · story bible · DeepSeek Harness plugin · Node.js + SQLite · zero npm dependencies · self-hosted & privacy-first, your data never leaves your machine.
+> 🔎 **English keywords**：local-first AI novel writing studio / novel writing software · AI writing assistant · AI 小说写作软件 · Chinese web novel (网文) / long-form fiction · character consistency & foreshadowing tracker · worldbuilding tool · story bible · DeepSeek Harness plugin · Node.js + SQLite · Excalidraw story canvas · self-hosted.
 
 ![写作台：左侧章节树、中间正文编辑器、右侧实时参考面板——截图取自仓库内一键导入的示例小说《雾都缝匠》](assets/screenshot-writing.png)
 

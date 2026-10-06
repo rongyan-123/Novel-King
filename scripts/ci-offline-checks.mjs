@@ -26,6 +26,8 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** @type {{name: string, cmd: string[], why: string}[]} */
 export const CHECKS = [
+  { name: '剧情画布保存与 AI（隔离 HTTP + 本地假模型）', cmd: ['--test', 'scripts/test-canvas-http.mjs'], why: '完整场景持久化、冲突拒绝、作品隔离、全图 AI 输入与候选不写入' },
+  { name: '画布会话与剧情图（保存串行/失败保留/连线校验/快捷键）', cmd: ['--test', 'scripts/test-canvas-session.mjs'], why: '保存途中编辑不丢失，剧情图与工具快捷键可验证' },
   { name: '写作工作台交互（偏好/创建去重/发布文本/查找）', cmd: ['--test', 'scripts/test-writing-workspace.mjs'], why: '写作偏好不污染正文，失败及快速连点可恢复' },
   { name: '空稿原子创建（隔离 HTTP：首章/兼容/事务回滚）', cmd: ['--test', 'scripts/test-blank-work-http.mjs'], why: '作品及第一章必须同时落库' },
   { name: '装配器单元测试（边界与溢出分支）', cmd: ['.p1-baseline/test-assembler.mjs'], why: '上下文装配的唯一入口' },

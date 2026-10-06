@@ -2,6 +2,15 @@
 
 本文件列出 Novel Studio 仓库内**不由本项目 MIT 许可证覆盖**的第三方组件与资产，各自遵循其上游条款。
 
+## Novel-King 剧情画布（2026-10-06）
+
+- Excalidraw 官方组件 `@excalidraw/excalidraw@0.18.1`（MIT），用于无限画布、文字、形状、铅笔、箭头与导出。上游：<https://github.com/excalidraw/excalidraw>。许可原文：`licenses/excalidraw-MIT.txt`。
+- 已拉取上游源码 `ed10ac7dca7e40f3f4a31269b4bfba980d0db41e`，本地参考位置为 `third_party/excalidraw/`，使用 Git archive 生成无 `.git` 的目录，忽略跟踪。原始 Git 检出保存在项目外临时目录；Novel-King 不添加上游 remote 或子模块。
+- 运行组件使用固定 npm 版本构建，源码参考目录不参与构建。`canvas/workspace.jsx` 为本项目的章节关联、剧情卡、保存与 AI 适配层。
+- React / React DOM `18.3.1`（MIT），构建工具 esbuild `0.25.12`（MIT）。依赖固定在 `package-lock.json`；构建命令：`npm ci && npm run build:canvas`。
+- 可自部署的产物与字体位于 `public/canvas-assets/`。字体维持上游字节，版权及字体许可（包括 SIL OFL 与 MIT）从实际 WOFF2 元数据提取，保存于 `licenses/excalidraw-fonts.txt`。组件与依赖的许可原文随 `public/canvas-assets/THIRD-PARTY-LICENSES.txt` 分发；打包文件保留其法律声明。
+- 绘图组件、字体与应用数据由自己的服务器提供，不连接 Excalidraw 官方服务保存作品。
+
 ---
 
 ## 1. 向量模型 `vendor/models/bge-small-zh-v1.5-f16.gguf`
@@ -52,5 +61,4 @@
 
 ## 3. 前端运行时依赖
 
-Novel Studio 前端**不使用任何 npm 运行时依赖**（`package.json` 的 `dependencies` 为空），
-因此仓库内不包含需要额外声明许可的第三方 JavaScript 库。
+原写作界面使用原生 JavaScript。Novel-King 的剧情画布使用固定版本的 Excalidraw、React 与 React DOM，构建工具为 esbuild；版本、来源与许可证见本文件的 Excalidraw 接入记录。浏览器运行资产及其许可证保存在 `public/canvas-assets/`，不依赖第三方 CDN。

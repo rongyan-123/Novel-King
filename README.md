@@ -1,3 +1,5 @@
+> **Novel-King fork:** this repository adds an immersive writing workspace and a persistent Excalidraw story canvas. See [the canvas guide](docs/novel-king-canvas.md) for drawing, chapter links, AI proposals and build steps. The Node backend remains self-hosted; canvas assets and fonts are bundled locally.
+
 <div align="center">
 
 # Novel Studio
@@ -9,7 +11,7 @@ Writing software + an AI writing assistant for **long-form fiction and Chinese w
 [![CI](https://github.com/bbaz123/novel-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/bbaz123/novel-studio/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node.js >= 22.13](https://img.shields.io/badge/node-%E2%89%A5%2022.13-3c873a?logo=node.js&logoColor=white)](https://nodejs.org)
-[![npm dependencies: 0](https://img.shields.io/badge/npm%20dependencies-0-brightgreen)](package.json)
+[![canvas: Excalidraw](https://img.shields.io/badge/canvas-Excalidraw-6965db)](docs/novel-king-canvas.md)
 [![data: 100% local](https://img.shields.io/badge/data-100%25%20local-blue)](#-privacy--data)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
 
@@ -44,7 +46,7 @@ Writing software + an AI writing assistant for **long-form fiction and Chinese w
 
 **Long fiction does not break at chapter 3 — it breaks at chapter 40.** A character is 「李队」 in ch. 12 and 「李队长」 in ch. 40; someone who died in ch. 3 walks back on stage; a thread you planted is never paid off. Chat tools write good paragraphs and lose the plot, and a longer prompt does not fix it.
 
-Novel Studio turns those failures into **deterministic, inspectable gates** instead of hoping the prompt holds. It is self-hosted and privacy-first: a Node.js service on your own machine, your whole library in one SQLite file, and **zero npm dependencies** — no `npm install`, no account, no cloud, no subscription.
+Novel Studio turns those failures into **deterministic, inspectable gates** instead of hoping the prompt holds. It is self-hosted and privacy-first: a Node.js service on your own machine and your whole library in one SQLite file. Novel-King adds pinned frontend dependencies for its story canvas; bundled assets allow ordinary startup without rebuilding them.
 
 > **Runs fully offline, with no AI at all.** Manual writing, worldbuilding, outlining and export work out of the box and cost nothing. An LLM (DeepSeek or any OpenAI-compatible endpoint) is optional and only used for the features you switch on.
 
@@ -348,7 +350,7 @@ Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) fi
 - **Questions, ideas and "how do I…"** — use [Discussions](https://github.com/bbaz123/novel-studio/discussions) rather than an issue
 - **Bugs** — the [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml) asks for your Node version, OS, reproduction steps and the verbatim error
 - **Open an issue before a large PR** so we can agree on direction first
-- **No npm dependencies** — the project is deliberately zero-dependency, and PRs adding one will not be merged
+- **Keep dependencies focused** — the story canvas uses pinned Excalidraw and React packages; new dependencies need a clear purpose
 - **Pure ESM** — `.mjs` plus `"type": "module"`; no CommonJS `require`
 - **Never commit `data/`** — it contains your library and API keys
 - **Run the gates before pushing**: `node .p1-baseline/verify-all.mjs`, `verify-phase-map.mjs` and `check-utf8.mjs`

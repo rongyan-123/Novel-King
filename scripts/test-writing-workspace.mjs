@@ -81,3 +81,27 @@ test('允许自定义已安装字体名称，拒绝 CSS 注入', () => {
   assert.equal(writing.normalizePreferences({ font: 'Noto Serif SC' }).font, 'Noto Serif SC');
   assert.equal(writing.normalizePreferences({ font: 'serif; background: url(evil)' }).font, writing.defaults.font);
 });
+
+test('字体设置只更新排版，保留背景和目录偏好；背景设置只更新背景', () => {
+  const original = writing.normalizePreferences({ image: 'data:image/png;base64,YWJj', background: '#123456', catalogWidth: 380, catalogCollapsed: true });
+  const font = writing.mergeAppearance(original, 'font', { fontSize: 26, indent: false, paragraphGap: false, background: '#ffffff' });
+  assert.equal(font.fontSize, 26);
+  assert.equal(font.indent, false);
+  assert.equal(font.background, '#123456');
+  assert.equal(font.image, original.image);
+  assert.equal(font.catalogWidth, 380);
+  assert.equal(font.catalogCollapsed, true);
+  const background = writing.mergeAppearance(font, 'background', { theme: 'paper', imageOpacity: .3, grid: 'dashed', fontSize: 15 });
+  assert.equal(background.fontSize, 26);
+  assert.equal(background.grid, 'dashed');
+  assert.equal(background.imageOpacity, .3);
+  assert.equal(background.theme, 'paper');
+});
+
+test('选中空卷后在该卷建章；未分卷和已删除卷不会误用当前章节的卷', () => {
+  const volumes = [{ id: 3 }, { id: 4 }];
+  assert.equal(writing.chapterVolume(volumes, 4, 3), 4);
+  assert.equal(writing.chapterVolume(volumes, null, 3), null);
+  assert.equal(writing.chapterVolume(volumes, undefined, 3), 3);
+  assert.equal(writing.chapterVolume(volumes, 99, 3), null);
+});

@@ -7,3 +7,8 @@
 *.tar.gz binary
 *.ico    binary
 *.png    binary
+*.woff2  binary
+
+# 构建产物中的上游模板字符串、翻译及许可空格保留原样，勿用源码格式化改写。
+public/canvas-assets/** linguist-generated=true -whitespace
+licenses/excalidraw-fonts.txt -whitespace

@@ -4771,5 +4771,21 @@ P.traceStopStream();
   temporalStub.temporalFail = false; temporalStub.temporalBroken = false;
 }
 
+P.state.commandPalette.open = true;
+await P.handleAction('close-command-palette', { dataset: {} });
+check('点击搜索窗口关闭按钮会退出搜索', P.state.commandPalette.open === false);
+P.state.volumes = [{ id: 4, title: '空卷' }];
+P.state.writingVolumeId = undefined;
+await P.handleAction('select-writing-volume', { dataset: { id: '4' } });
+check('点击空卷选中卷且不打开编辑窗口', P.state.writingVolumeId === 4);
+P.state.writingCanvasMode = true;
+sandbox.__canvasFlushes = 0;
+new vm.Script('writingCanvas = { flush: async () => { globalThis.__canvasFlushes++; return true; } };').runInContext(ctx);
+fireDocKeydown({ key: 's', ctrlKey: true, target: new El('div') });
+await new Promise((resolve) => setTimeout(resolve, 0));
+check('画布中的 Ctrl S 保存画布，不保存隐藏的正文编辑器', sandbox.__canvasFlushes === 1);
+new vm.Script('writingCanvas = null;').runInContext(ctx);
+P.state.writingCanvasMode = false;
+
 console.log(`\n=== ${failures === 0 ? 'ALL PASS' : failures + ' FAILURES'} ===`);
 process.exit(failures ? 1 : 0);

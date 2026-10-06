@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Upstream source checkout is local reference material, never a nested repository.
+third_party/excalidraw/
+
 # Local data — never upload
 # data/ 一个目录里同时有：novel.db（含 API Key 与作品正文）、数据库备份、
 # 运行日志、🐞 运行追踪明细、OpenViking 同步队列、以及抢救/恢复用的中间产物。

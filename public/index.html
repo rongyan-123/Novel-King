@@ -24,22 +24,24 @@
       <div class="sidebar-head">
         <button class="icon-btn" data-action="back-works" title="返回作品列表">🏠</button>
         <span class="sidebar-logo">📖</span>
-        <div class="sidebar-title" id="sidebar-title">Novel Studio</div>
+        <div class="sidebar-title" id="sidebar-title">Novel-King</div>
       </div>
       <nav class="sidebar-nav" id="sidebar-nav">
-        <div class="nav-section-label" data-nav-section="global">工作台</div>
-        <button data-view="works" data-nav-section="global" title="管理你的所有小说项目（初始页默认显示）">📚 <span>我的作品</span></button>
-        <button data-view="ai-create" data-nav-section="global" title="没进作品时可用：AI 自动创建整本小说 / 创作工作台 / 任务历史 / AI 设置">✨ <span>AI 创作</span></button>
-        <button data-view="library" data-nav-section="global" title="跨作品共享的写作参考资料（方法 / 素材 / 范例）：先扫描预览、确认后才写入；资料不是本书事实，作品里还要单独打开开关">📎 <span>共享资料</span></button>
+        <div class="nav-section-label" data-nav-section="global">创作</div>
+        <button data-view="works" data-nav-section="global" title="管理作品与继续写作">▤ <span>我的书架</span></button>
+        <button data-view="library" data-nav-section="global" title="管理跨作品使用的参考资料">▱ <span>参考资料</span></button>
+        <button data-view="ai" data-nav-section="global" title="配置模型与 API">⚙ <span>AI 设置</span></button>
         <div class="nav-section-label" data-nav-section="workspace">作品空间</div>
-        <button data-view="overview" data-nav-section="workspace" title="当前作品的数据统计：章节、设定词条、角色、剧情线">▦ <span>作品总览</span></button>
-        <button data-view="writing" data-nav-section="workspace" title="写正文的地方：左侧选章节，右侧写内容（自动保存）；切三栏可看参考面板">✍ <span>写作台</span></button>
-        <button data-view="settings" data-nav-section="workspace" title="设定集中管理：剧情线（按线索看）/ 大纲（按卷章看）/ 设定库 / 角色 / 长期记忆">▤ <span>故事设计</span></button>
-        <button data-view="ai-board" data-nav-section="workspace" title="故事状态、创作上下文、编辑规则、文风、分支和导入重建">◈ <span>故事状态与工具</span></button>
-        <div class="nav-section-label" data-nav-section="support">辅助与诊断</div>
+        <button data-view="writing" data-nav-section="workspace" title="写正文与画大纲：左侧章节目录，右侧角色、设定与 AI 工具">✍ <span>写作台</span></button>
+        <button data-view="settings" data-nav-section="workspace" title="管理角色、世界观和设定">♙ <span>角色与设定</span></button>
+        <details class="sidebar-more"><summary>⋯ 更多工具</summary>
+        <button data-view="ai-create" data-nav-section="global" title="自动创建小说与批量创作">✦ <span>批量 AI 创作</span></button>
+        <button data-view="overview" data-nav-section="workspace" title="作品的数据统计">▦ <span>作品统计</span></button>
+        <button data-view="ai-board" data-nav-section="workspace" title="高级故事状态与诊断工具">◈ <span>高级故事工具</span></button>
         <button data-view="thanks" data-nav-section="support" title="本工坊实际用到的开源组件、设计参考来源与许可核验记录">✦ <span>借鉴与致谢</span></button>
         <button data-view="trace" data-nav-section="support" title="排查问题用：把每次操作跑了哪些代码、花了多久、调了什么 AI 录成可回看的调用链。正常写作可以无视">⌁ <span>运行追踪</span></button>
         <button data-view="logs" data-nav-section="support" title="排查问题用：错误、慢操作、进程异常的记录。正常写作可以无视">≡ <span>日志</span></button>
+        </details>
       </nav>
     </aside>
     <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
@@ -54,7 +56,7 @@
           <div class="search-results" id="search-results" hidden></div>
         </div>
         <div class="topbar-context" id="topbar-context" aria-live="polite"></div>
-        <div class="topbar-right" id="topbar-right"><button class="btn small secondary" data-action="open-command-palette" title="打开命令面板（Ctrl/Cmd+K）">⌘ K</button></div>
+        <div class="topbar-right" id="topbar-right"><button class="btn small secondary" data-action="open-command-palette" title="搜索（Ctrl/Cmd+K）">⌕ 搜索</button></div>
       </header>
       <main id="content" class="content"></main>
     </div>

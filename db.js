@@ -86,6 +86,13 @@ CREATE TABLE IF NOT EXISTS volumes (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+CREATE TABLE IF NOT EXISTS work_canvases (
+  work_id INTEGER PRIMARY KEY REFERENCES works(id) ON DELETE CASCADE,
+  scene_json TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
 CREATE TABLE IF NOT EXISTS plotlines (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,

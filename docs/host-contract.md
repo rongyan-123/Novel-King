@@ -1,4 +1,6 @@
-# Host Contract 1.20.0（宿主契约 · 冻结）
+# Host Contract 1.21.0（宿主契约 · 冻结）
+
+Novel-King 1.21.0（2026-10-06）附加剧情画布：新增 `work_canvases`（作品外键删除级联、完整场景 JSON、版本号与更新时间）。新增 `GET /api/canvas?work_id=`、作者侧 `PUT /api/canvas?work_id=`（要求匹配 revision，冲突 409）、只读 `POST /api/canvas/validate?work_id=`（导入预检）、`POST /api/ai/canvas`（完整场景与本作品资料，可选识图图片，结果不写入）。画布计划不进入正典事实；作者确认后只更新画布。旧库冻结表及指纹、原有插件工具面维持兼容。
 
 > **这份文档是 novel-writing 插件阶段的稳定地面。**
 > 冻结的是**已经验收过的行为与接口**，不是"理论完美"；任何新增宿主行为都必须以后再走主体变更流程（质量门 → 行为门 → 兼容门），

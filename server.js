@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { db, withTransaction, inTransaction } from './db.js';
+import { getCanvas, saveCanvas, validateCanvasScene, canvasAIMessages, parseCanvasProposal } from './canvas-store.mjs';
 import { isHarnessAvailable, isHarnessBuilt, runHarnessTaskWithProgress, modelSwitchLoad, harnessRuntimeInfo, setHarnessRepoOverride, looksLikeDshRepo } from './harness.js';
 import { readZip } from './zip-reader.mjs';
 import * as ImportGuard from './ai/import/guard.mjs';
@@ -1111,7 +1112,7 @@ const AI_REQUEST_TIMEOUT_MS = LONG_AI_TIMEOUT_MS;
 // confirm / bootstrap 是作者动作，模型侧 403；确认前不写任何正式状态）。PUT /api/novel/state/temporal 启用
 // 改为迁移门禁（缺表/缺索引 → 503，不吞错误继续跑），启用即登记迁移版本，响应新增 migration 与首次启用的
 // enable_scope（预算 + 待重建范围）；未开启作品不触发额外模型调用、旧上下文不变；插件工具/端点面不变，无新表。
-const HOST_CONTRACT_VERSION = '1.20.0';
+const HOST_CONTRACT_VERSION = '1.21.0';
 
 // 调用 OpenAI 兼容的 Chat Completions 接口，带超时与 URL 自动回退。
 async function callAI(config, messages, options = {}) {
@@ -1119,7 +1120,9 @@ async function callAI(config, messages, options = {}) {
     throw new Error('AI 请求缺少 messages 数组');
   }
   for (const m of messages) {
-    if (!m || typeof m.role !== 'string' || typeof m.content !== 'string') {
+    const validContent = typeof m?.content === 'string' || (Array.isArray(m?.content) && m.content.length > 0 && m.content.every((part) =>
+      (part?.type === 'text' && typeof part.text === 'string') || (part?.type === 'image_url' && /^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(part.image_url?.url || ''))));
+    if (!m || typeof m.role !== 'string' || !validContent) {
       throw new Error('messages 格式错误：每个消息必须包含 role 和 content');
     }
   }
@@ -9174,6 +9177,12 @@ async function handleStoryStateRoute({ segments, method, query, req, res }) {
       if (action === 'write_stream') {
         return handleAIWriteStream(req, res, body, config);
       }
+      if (action === 'canvas') {
+        const messages = canvasAIMessages(Number(body.work_id), body);
+        const data = await callAI(config, messages, { temperature: body.temperature, max_tokens: body.max_tokens, reasoning_effort: body.reasoning_effort });
+        const reply = data?.choices?.[0]?.message?.content || '';
+        return sendJSON(res, 200, { ok: true, reply, proposal: parseCanvasProposal(reply) });
+      }
       const messages = body.messages;
       if (!Array.isArray(messages) || messages.length === 0) return sendError(res, 400, '缺少 messages');
       if (action === 'write' || action === 'personality' || action === 'outline' || action === 'chat' || action === 'polish' || action === 'expand' || action === 'pipeline') {
@@ -9185,6 +9194,24 @@ async function handleStoryStateRoute({ segments, method, query, req, res }) {
       logAIError(action, e, `/api/ai/${action}`);
       return sendError(res, e.status || 502, e.message || 'AI request failed');
     }
+  }
+
+  if (resource === 'canvas') {
+    const workId = Number(query.work_id);
+    try {
+      if (method === 'POST' && segments[2] === 'validate') {
+        getCanvas(workId);
+        validateCanvasScene(workId, (await readBody(req)).scene);
+        return sendJSON(res, 200, { ok: true });
+      }
+      if (method === 'GET') return sendJSON(res, 200, getCanvas(workId));
+      if (method === 'PUT') {
+        const author = requireAuthorChannel(req, '保存剧情画布');
+        if (!author.ok) return sendError(res, author.status, author.message);
+        return sendJSON(res, 200, saveCanvas(workId, await readBody(req)));
+      }
+      return sendError(res, 405, 'Method not allowed');
+    } catch (error) { return sendError(res, error.status || 400, error.message); }
   }
 
   // Generic CRUD for listed resources
