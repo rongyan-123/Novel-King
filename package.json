@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "start:server": "node account-server.mjs",
     "dev": "node --watch server.js",
     "build:canvas": "node scripts/build-canvas.mjs"
   },

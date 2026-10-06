@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>登录 · Novel-King</title>
+  <link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/account.css">
+  <script src="/appearance.js"></script>
+  <script>NovelKingAppearance.apply(document, NovelKingAppearance.read(localStorage), matchMedia('(prefers-color-scheme: dark)').matches);</script>
+</head>
+<body class="account-page">
+  <main class="account-auth">
+    <a class="account-brand" href="/login"><span aria-hidden="true">N</span> Novel-King</a>
+    <h1 id="auth-heading">继续你的故事</h1>
+    <p class="account-intro">登录后，在手机和电脑上打开自己的作品与资料。</p>
+    <div class="account-tabs" role="tablist" aria-label="账户入口">
+      <button role="tab" id="login-tab" aria-selected="true" type="button">登录</button>
+      <button role="tab" id="register-tab" aria-selected="false" type="button">注册</button>
+    </div>
+    <form id="auth-form">
+      <label>用户名<input id="username" name="username" autocomplete="username" required minlength="2" maxlength="32" placeholder="你的用户名"></label>
+      <label>密码<div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128" placeholder="请输入密码"><button id="show-password" type="button" aria-label="显示密码">显示</button></div></label>
+      <label id="confirm-row" hidden>确认密码<input id="confirm-password" type="password" autocomplete="new-password" maxlength="128" placeholder="再次输入密码"></label>
+      <div id="captcha-row" hidden>
+        <label for="captcha-answer">算一道题</label>
+        <div class="captcha-controls"><span id="captcha-question" aria-live="polite">正在出题…</span><input id="captcha-answer" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-label="计算题答案" placeholder="答案"><button id="refresh-captcha" class="btn secondary" type="button">换一题</button></div>
+        <p class="account-hint">两分钟内有效，每道题只能提交一次。</p>
+      </div>
+      <p class="account-message" id="auth-message" role="status" aria-live="polite"></p>
+      <button class="btn account-submit" id="auth-submit" type="submit">登录</button>
+    </form>
+    <p class="account-footnote">作品、文件和 AI 配置保存在你的个人空间。</p>
+  </main>
+  <script src="/account-login.js"></script>
+</body>
+</html>

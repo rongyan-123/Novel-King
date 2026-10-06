@@ -1,0 +1,22 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+test('同一浏览器里两个账号的草稿、当前位置和快捷键分别保存', () => {
+  const context = { window: {} };
+  vm.runInNewContext(fs.readFileSync(new URL('../public/account-storage.js', import.meta.url), 'utf8'), context);
+  const memory = new Map();
+  const native = { getItem: key => memory.get(key) ?? null, setItem: (key, value) => memory.set(key, String(value)), removeItem: key => memory.delete(key) };
+  native.setItem('ns_session', 'legacy-author');
+  const alice = context.window.NovelKingAccountStorage.scope(native, 'alice');
+  const bob = context.window.NovelKingAccountStorage.scope(native, 'bob');
+  alice.setItem('ns_session', 'alice-novel');
+  alice.setItem('novelking.fileLibrary.draft.same-id', 'private draft');
+  assert.equal(bob.getItem('ns_session'), null);
+  assert.equal(bob.getItem('novelking.fileLibrary.draft.same-id'), null);
+  bob.setItem('ns_session', 'bob-novel');
+  bob.removeItem('ns_session');
+  assert.equal(alice.getItem('ns_session'), 'alice-novel');
+  assert.equal(native.getItem('ns_session'), 'legacy-author');
+  assert.equal(context.window.NovelKingAccountStorage.scope(native, null), native);
+});

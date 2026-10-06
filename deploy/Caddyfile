@@ -1,0 +1,11 @@
+{$NOVELKING_DOMAIN} {
+  encode zstd gzip
+  request_body {
+    max_size 32MB
+  }
+  reverse_proxy novel-king:3741 {
+    header_up Host {host}
+    # Override untrusted input, send one IP from this explicitly trusted proxy.
+    header_up X-Forwarded-For {remote_host}
+  }
+}

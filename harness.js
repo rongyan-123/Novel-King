@@ -237,6 +237,7 @@ function clearPatchBackup() {
   try { fs.unlinkSync(PATCH_BACKUP); } catch (_) { /* 忽略 */ }
 }
 function restoreHarnessSettingsIfNeeded() {
+  if (process.env.NOVELKING_HOSTED === '1') return;
   const backup = readPatchBackup();
   if (!backup || !backup.patched || !backup.original) return;
   try {
@@ -251,6 +252,7 @@ function restoreHarnessSettingsIfNeeded() {
 restoreHarnessSettingsIfNeeded();
 
 export function isHarnessAvailable() {
+  if (process.env.NOVELKING_HOSTED === '1') return false;
   return fs.existsSync(harnessPackagePath());
 }
 
@@ -704,6 +706,7 @@ function cleanupTaskSettings(taskSettings) {
 }
 
 export async function runHarnessTaskWithProgress(prompt, options = {}, onChunk) {
+  if (process.env.NOVELKING_HOSTED === '1') throw Object.assign(new Error('服务器版暂未开放 DSH 主机工具'), { status: 403 });
   // 决策 B：首次真正执行任务时，把 home 决策打印**一次**（模块导入零副作用，见函数注释）。
   logTaskHomeDecisionOnce();
 

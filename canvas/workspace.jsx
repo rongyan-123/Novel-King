@@ -7,6 +7,7 @@ import { proposalSkeleton } from './plot.mjs';
 import { defaultShortcuts, shortcutActions, normalizeShortcuts, actionForBinding, bindingFromKey, bindingFromWheel } from './shortcuts.mjs';
 import { ShortcutSettings } from './shortcut-settings.jsx';
 
+const accountLocalStorage = window.parent.NovelKingAccount?.localStorage || localStorage;
 const shortcutKey = 'novel_king_canvas_shortcuts';
 const capture = CaptureUpdateAction.IMMEDIATELY;
 function persistentScene(elements, appState, files) {
@@ -14,7 +15,7 @@ function persistentScene(elements, appState, files) {
   return { elements, appState: Object.fromEntries(keys.filter((key) => appState[key] !== undefined).map((key) => [key, appState[key]])), files };
 }
 function readShortcuts() {
-  try { return normalizeShortcuts(JSON.parse(localStorage.getItem(shortcutKey) || '{}')); }
+  try { return normalizeShortcuts(JSON.parse(accountLocalStorage.getItem(shortcutKey) || '{}')); }
   catch { return { ...defaultShortcuts }; }
 }
 function download(blob, name) {
@@ -200,7 +201,7 @@ export async function mountCanvas(host, options) {
     };
     const applyShortcuts = (configured) => {
       const next = normalizeShortcuts(configured);
-      localStorage.setItem(shortcutKey, JSON.stringify(next));
+      accountLocalStorage.setItem(shortcutKey, JSON.stringify(next));
       setShortcuts(next); setShortcutsOpen(false);
     };
 

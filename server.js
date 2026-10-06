@@ -80,6 +80,19 @@ const publicDir = path.join(__dirname, 'public');
 // 此前这里是 `process.env.PORT || 3737`（不转数字），于是 PORT='abc' 时服务会拿字符串去 listen，
 // 而下发给 dsh 子进程的 NOVELSTUDIO_BASE_URL 却是 3737：两边指向不同实例，且报错信息很难懂。
 const PORT = Number(process.env.PORT) || 3737;
+const WORKER_TOKEN = process.env.NOVELKING_WORKER_TOKEN || '';
+const HOSTED = process.env.NOVELKING_HOSTED === '1';
+if (WORKER_TOKEN && process.connected) process.once('disconnect', () => process.exit(0));
+
+function requireHostedAIEndpoint(base) {
+  if (!HOSTED) return;
+  let endpoint;
+  try { endpoint = new URL(base); } catch { throw Object.assign(new Error('AI 接口地址无效'), { status: 403 }); }
+  const allowed = (process.env.NOVELKING_AI_ORIGINS || '').split(',');
+  if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.search || endpoint.hash || !allowed.includes(endpoint.origin)) {
+    throw Object.assign(new Error('此 AI 服务商尚未由管理员开放，请使用已允许的 HTTPS 接口'), { status: 403 });
+  }
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -1142,6 +1155,7 @@ async function callAI(config, messages, options = {}) {
     }
   }
   const base = String(config.base_url || 'https://api.deepseek.com').trim().replace(/\/+$/, '');
+  requireHostedAIEndpoint(base);
   const rawMaxTokens = options.max_tokens ?? config.max_tokens ?? 4096;
   const maxTokens = Number.isFinite(Number(rawMaxTokens))
     ? Math.min(Math.max(1, Math.floor(Number(rawMaxTokens))), MAX_OUTPUT_TOKENS)
@@ -1163,6 +1177,7 @@ async function callAI(config, messages, options = {}) {
     try {
       const resp = await fetch(url, {
         method: 'POST',
+        ...(HOSTED ? { redirect: 'error' } : {}),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${config.api_key}`
@@ -1235,6 +1250,7 @@ async function callAIStream(config, messages, options = {}, onDelta) {
     }
   }
   const base = String(config.base_url || 'https://api.deepseek.com').trim().replace(/\/+$/, '');
+  requireHostedAIEndpoint(base);
   const rawMaxTokens = options.max_tokens ?? config.max_tokens ?? 4096;
   const maxTokens = Number.isFinite(Number(rawMaxTokens))
     ? Math.min(Math.max(1, Math.floor(Number(rawMaxTokens))), MAX_OUTPUT_TOKENS)
@@ -1276,6 +1292,7 @@ async function callAIStream(config, messages, options = {}, onDelta) {
     try {
       const resp = await fetch(url, {
         method: 'POST',
+        ...(HOSTED ? { redirect: 'error' } : {}),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${config.api_key}`
@@ -9546,6 +9563,9 @@ setInterval(() => {
 }, 200).unref();
 
 const server = http.createServer(async (req, res) => {
+  if (WORKER_TOKEN && req.headers['x-novelking-worker'] !== WORKER_TOKEN) {
+    return sendError(res, 401, '请通过账户服务访问工作台');
+  }
   const startedAt = performance.now();
   let pathname = '';
   let query = {};
@@ -9601,7 +9621,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(WORKER_TOKEN ? Number(process.env.NOVELKING_WORKER_PORT || 0) : PORT, '127.0.0.1', () => {
+  if (WORKER_TOKEN) console.log(`NOVELKING_WORKER_READY:${server.address().port}`);
   console.log(`Novel Studio is running at http://localhost:${PORT}`);
   // 启动后异步把尚未索引的作品导入 OpenViking 共享记忆库（语义召回开启时）。
   autoIndexExistingWorks();

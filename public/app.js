@@ -1,3 +1,5 @@
+const accountLocalStorage = window.NovelKingAccount?.localStorage || localStorage;
+const accountSessionStorage = window.NovelKingAccount?.sessionStorage || sessionStorage;
 // Novel Studio - vanilla SPA
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -77,12 +79,12 @@ const state = {
   plotlineCharacters: [],
   worldEntries: [],
   apiConfigs: [],
-  activeConfigId: Number(localStorage.getItem('ns_active_config')) || null,
+  activeConfigId: Number(accountLocalStorage.getItem('ns_active_config')) || null,
   apiTestResults: {}, // N-07：连接测试结果驻留显示（config_id → {ok, at, msg}）
   ovStatus: null, // AI 设置页「OpenViking 记忆库」卡的状态（GET /novel/openviking）
   envTools: null, // AI 设置页「工具与环境清单」卡的检测结果（GET /env/tools）
   // 专项 A：默认两栏（编辑器更宽、参考面板收起，需要时再切三栏）
-  editorLayout: localStorage.getItem('ns_editor_layout') || 'two',
+  editorLayout: accountLocalStorage.getItem('ns_editor_layout') || 'two',
   // 参考面板：当前页签 + 词条预览默认折叠为标题（专项 A）
   refTab: 'terms',
   writingTool: null,
@@ -91,11 +93,11 @@ const state = {
   writingVolumeId: undefined,
   collapsedWritingVolumes: new Set(),
   writingCanvasMode: false,
-  refPreview: localStorage.getItem('ns_ref_preview') === '1',
-  outlineMode: localStorage.getItem('ns_outline_mode') || 'mind',
+  refPreview: accountLocalStorage.getItem('ns_ref_preview') === '1',
+  outlineMode: accountLocalStorage.getItem('ns_outline_mode') || 'mind',
   settingsTab: 'terms',
   aiTab: 'ai',
-  aiCreateHomeTab: localStorage.getItem('ns_ai_create_tab') || 'auto',
+  aiCreateHomeTab: accountLocalStorage.getItem('ns_ai_create_tab') || 'auto',
   // T6：章末状态面板（编辑器正文下方；真实后端时态状态，不进入正文与字数统计）
   chapterPanel: null,        // GET /novel/state/panel 的最近一次结果
   chapterPanelSeq: 0,        // 切章/切页竞态防护：只有最新一次请求可以写 DOM
@@ -194,7 +196,7 @@ const state = {
   recoveryForChapter: null,
   commandPalette: { open: false, query: '', items: [], active: 0, seq: 0, visibleItems: [], returnFocus: null, status: 'idle', error: '' },
   lastRenderedRoute: null,
-  sidebarCollapsed: (() => { try { const saved = localStorage.getItem('ns_sidebar_collapsed'); return saved === '1' || (saved === null && typeof window !== 'undefined' && window.innerWidth <= 720); } catch (_) { return typeof window !== 'undefined' && window.innerWidth <= 720; } })()
+  sidebarCollapsed: (() => { try { const saved = accountLocalStorage.getItem('ns_sidebar_collapsed'); return saved === '1' || (saved === null && typeof window !== 'undefined' && window.innerWidth <= 720); } catch (_) { return typeof window !== 'undefined' && window.innerWidth <= 720; } })()
 };
 
 // 合并后的侧栏板块：小说设定 / AI创造板块（进入作品后）
@@ -941,7 +943,7 @@ function setTopbarTitle(text) {
 function applyGlobalAppearance(preferences, { persist = true } = {}) {
   const normalized = NovelKingAppearance.normalize(preferences);
   if (persist) {
-    try { NovelKingAppearance.save(localStorage, normalized); }
+    try { NovelKingAppearance.save(accountLocalStorage, normalized); }
     catch { toast('外观已应用，但浏览器未能保存偏好', 'error'); }
   }
   NovelKingAppearance.apply(document, normalized, window.matchMedia?.('(prefers-color-scheme: dark)').matches || false);
@@ -949,7 +951,7 @@ function applyGlobalAppearance(preferences, { persist = true } = {}) {
 }
 
 function applyTheme(theme, { persist = true } = {}) {
-  applyGlobalAppearance({ ...NovelKingAppearance.read(localStorage), mode: theme === 'dark' ? 'dark' : 'light' }, { persist });
+  applyGlobalAppearance({ ...NovelKingAppearance.read(accountLocalStorage), mode: theme === 'dark' ? 'dark' : 'light' }, { persist });
 }
 
 function toggleTheme() {
@@ -957,7 +959,7 @@ function toggleTheme() {
 }
 
 function openGlobalAppearance() {
-  const preferences = NovelKingAppearance.read(localStorage);
+  const preferences = NovelKingAppearance.read(accountLocalStorage);
   const modes = [['system', '跟随系统'], ['light', '浅色'], ['dark', '深色']];
   openModal({ title: '全局外观', body: `<div class="global-appearance">
     <p class="settings-intro">书架、写作台与画布，使用同一套外观。</p>
@@ -1234,11 +1236,11 @@ async function renderView() {
   }
 }
 
-// D13：把当前会话位置（作品/页面/当前章节等）写入 sessionStorage，刷新后自动恢复，
+// D13：把当前会话位置（作品/页面/当前章节等）写入 accountSessionStorage，刷新后自动恢复，
 // 避免“写作中误刷新直接退回初始页”。
 function persistSession() {
   try {
-    sessionStorage.setItem('ns_session', JSON.stringify({
+    accountSessionStorage.setItem('ns_session', JSON.stringify({
       workId: state.workId,
       view: state.view,
       settingsTab: state.settingsTab,
@@ -1252,13 +1254,13 @@ function persistSession() {
   } catch (_) { /* 存储不可用时静默 */ }
   // R06：未进入作品时也记住首页视图（我的作品 / AI 创作 / 借鉴与致谢），刷新后回到原处。
   if (!state.workId) {
-    try { sessionStorage.setItem('ns_home_view', state.view || 'works'); } catch (_) { /* 存储不可用时静默 */ }
+    try { accountSessionStorage.setItem('ns_home_view', state.view || 'works'); } catch (_) { /* 存储不可用时静默 */ }
   }
 }
 
 function restoreSession() {
   try {
-    const saved = JSON.parse(sessionStorage.getItem('ns_session') || 'null');
+    const saved = JSON.parse(accountSessionStorage.getItem('ns_session') || 'null');
     if (!saved || !Number(saved.workId)) return;
     state.workId = Number(saved.workId);
     state.loadedWorkId = null;
@@ -2091,7 +2093,7 @@ function traceStart() {
     if (trace.longOpId && Date.now() - trace.longLastAt > TRACE_LONG_IDLE_MS) traceFlushLong('done');
     traceSendPending();
   }, 10000);
-  try { sessionStorage.setItem('ns_trace_on', '1'); } catch (_) { /* 忽略 */ }
+  try { accountSessionStorage.setItem('ns_trace_on', '1'); } catch (_) { /* 忽略 */ }
 }
 
 async function traceStop() {
@@ -2109,7 +2111,7 @@ async function traceStop() {
   trace.on = false;
   traceStopStream();
   traceRenderTopbarButton();
-  try { sessionStorage.removeItem('ns_trace_on'); } catch (_) { /* 忽略 */ }
+  try { accountSessionStorage.removeItem('ns_trace_on'); } catch (_) { /* 忽略 */ }
 }
 
 async function traceToggle() {
@@ -2741,7 +2743,7 @@ async function renderSettingsBoard(content, tab) {
 // AI 创作已迁移到初始页（见 renderAICreateHome / renderAIHome）。
 // 2026-09-30（T6）：原先「创作上下文」一页里塞着编辑规则 / 作者样文 / 故事状态 / 剧情分支 /
 // 导入重建五块内容，且打开一次要同时加载五份数据。现在拆成**同级独立页面**：
-// 每页有稳定 route key、独立 load / render / 空态 / 错误态，刷新（sessionStorage）后回到原页；
+// 每页有稳定 route key、独立 load / render / 空态 / 错误态，刷新（accountSessionStorage）后回到原页；
 // 旧路由键 `st` 保留为「创作上下文」的兼容别名（旧会话、旧链接、旧帮助锚点不失效）。
 const AI_TABS = [
   ['ai', '⚙️ AI 设置'],
@@ -3159,7 +3161,7 @@ async function createQuickChapter(actionEl) {
 function applyWritingPreferences() {
   const workspace = $('#content.king-workspace');
   if (!workspace) return;
-  const preferences = state.writingPreferences ||= NovelKingWriting.readPreferences(localStorage);
+  const preferences = state.writingPreferences ||= NovelKingWriting.readPreferences(accountLocalStorage);
   workspace.dataset.writingGrid = preferences.grid;
   workspace.classList.toggle('catalog-collapsed', preferences.catalogCollapsed);
   for (const [property, value] of Object.entries({
@@ -3173,7 +3175,7 @@ function applyWritingPreferences() {
 }
 
 function openWritingAppearance(section = 'font') {
-  const preferences = state.writingPreferences ||= NovelKingWriting.readPreferences(localStorage);
+  const preferences = state.writingPreferences ||= NovelKingWriting.readPreferences(accountLocalStorage);
   const numeric = (key, label, minimum, maximum, step = 1) => `<label class="appearance-slider"><span>${label}<output>${preferences[key]}</output></span><input name="${key}" type="range" min="${minimum}" max="${maximum}" step="${step}" value="${preferences[key]}"></label>`;
   const fontBody = `<div class="form-grid">
     <div class="field full"><label>字体</label><select name="font">${NovelKingWriting.fonts.map((font, index) => `<option value="${esc(font)}" ${preferences.font === font ? 'selected' : ''}>${['微软雅黑', '宋体', '楷体', 'Arial'][index]}</option>`).join('')}</select></div>
@@ -3249,7 +3251,7 @@ async function saveWritingAppearance() {
   const section = panel.dataset.section || 'font';
   if (String(values.customFont || '').trim()) values.font = values.customFont.trim();
   if (section === 'background') values.image = panel.dataset.pendingImage || '';
-  state.writingPreferences = NovelKingWriting.savePreferences(localStorage, NovelKingWriting.mergeAppearance(state.writingPreferences, section, values));
+  state.writingPreferences = NovelKingWriting.savePreferences(accountLocalStorage, NovelKingWriting.mergeAppearance(state.writingPreferences, section, values));
   applyWritingPreferences();
   closeModal();
 }
@@ -3290,7 +3292,7 @@ function bindCatalogResize() {
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', finish);
       handle.removeEventListener('pointercancel', finish);
-      try { NovelKingWriting.savePreferences(localStorage, state.writingPreferences); } catch (error) { toast(`目录宽度无法保存：${error.message}`, 'error'); }
+      try { NovelKingWriting.savePreferences(accountLocalStorage, state.writingPreferences); } catch (error) { toast(`目录宽度无法保存：${error.message}`, 'error'); }
     };
     handle.addEventListener('pointermove', move);
     handle.addEventListener('pointerup', finish);
@@ -3299,7 +3301,7 @@ function bindCatalogResize() {
   handle.addEventListener('keydown', (event) => {
     if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
     event.preventDefault();
-    state.writingPreferences = NovelKingWriting.savePreferences(localStorage, { ...state.writingPreferences, catalogWidth: state.writingPreferences.catalogWidth + (event.key === 'ArrowRight' ? 10 : -10) });
+    state.writingPreferences = NovelKingWriting.savePreferences(accountLocalStorage, { ...state.writingPreferences, catalogWidth: state.writingPreferences.catalogWidth + (event.key === 'ArrowRight' ? 10 : -10) });
     applyWritingPreferences();
   });
 }
@@ -3386,6 +3388,7 @@ async function renderWriting(content) {
       <input id="writing-work-name" value="${esc(state.work?.title || '未命名作品')}" aria-label="作品名称" title="修改作品名称">
       <div class="workspace-mode-tabs"><button data-action="writing-prose" aria-pressed="true">正文</button><button data-action="writing-canvas" aria-pressed="false">大纲画布</button></div>
       <span class="grow"></span><span class="workspace-autosave-label">自动保存已开启</span><button class="workspace-button workspace-title-action" data-action="open-global-appearance" title="调整全局配色与界面风格">◐ 外观</button>
+      ${window.NovelKingAccount?.hosted ? `<button class="workspace-button workspace-title-action account-trigger" data-account-menu title="我的账号 · 修改密码 / 退出登录">${esc(window.NovelKingAccount.user.username)}</button>` : ''}
       <button class="workspace-button workspace-title-action" data-action="edit-work" data-id="${state.workId}">作品设置</button>
       <button class="workspace-button workspace-title-action" data-action="open-command-palette" title="搜索章节、角色与设定（Ctrl / Cmd + K）">${writingIcon('find')} 搜索</button>
     </header>
@@ -7209,7 +7212,7 @@ async function renderAI(content) {
     <div class="page-head">
       <div>
         <h1 class="page-title">AI 中心 ${helpDot('model_policy')}</h1>
-        <div class="page-sub">配置模型与创作内核，让 AI 成为你的写作助手</div>
+        <div class="page-sub">${window.NovelKingAccount?.hosted ? '配置模型，选择你的 AI 写作助手' : '配置模型与创作内核，让 AI 成为你的写作助手'}</div>
       </div>
       <div class="page-actions">
         <button class="btn" data-action="new-api-config">＋ 新建 API 配置</button>
@@ -7218,7 +7221,7 @@ async function renderAI(content) {
     <div id="stale-banner" class="stale-banner" hidden></div>
     <div class="card mb-12">
       <div class="muted">当前使用：<b>${configs.find((c) => c.id === state.activeConfigId)?.name || '未选择'}</b></div>
-      <div class="muted mt-8">API Key 只保存在本机 SQLite 数据库中，不会上传到任何第三方服务器（除你配置的 AI 服务商）。</div>
+      <div class="muted mt-8">${window.NovelKingAccount?.hosted ? 'API Key 保存在服务器上属于你的个人数据库里。模型请求只会发往管理员允许的 AI 服务商。' : 'API Key 只保存在本机 SQLite 数据库中，不会上传到任何第三方服务器（除你配置的 AI 服务商）。'}</div>
     </div>
     <div class="grid cols-2">
       ${configs.map((c) => {
@@ -7247,8 +7250,7 @@ async function renderAI(content) {
         </div>`;
       }).join('') || '<div class="empty">还没有 API 配置</div>'}
     </div>
-    <details class="ai-advanced mt-12"><summary>创作内核 · dsh</summary>${dshCardHtml()}</details>
-    <details class="ai-advanced mt-12"><summary>高级设置与诊断</summary>
+    ${window.NovelKingAccount?.hosted ? '<div class="card mt-12"><b>服务器版 AI</b><p class="muted">正文写作、润色和画布剧情助手使用上方的模型配置。DSH 与本机文件工具待独立沙箱接入后开放。</p></div>' : `<details class="ai-advanced mt-12"><summary>创作内核 · dsh</summary>${dshCardHtml()}</details><details class="ai-advanced mt-12"><summary>高级设置与诊断</summary>
     ${openVikingCardHtml()}
     ${toolListCardHtml()}
     <div class="card mt-12">
@@ -7261,11 +7263,10 @@ async function renderAI(content) {
         <button class="btn small secondary" data-action="refresh-ai-errors">刷新</button>
       </div>
       <div id="ai-error-history" class="ai-error-history"><span class="muted">加载中...</span></div>
-    </div></details>`;
+    </div></details>`}`;
   loadAIErrors();
   // 两张新卡各自异步加载：慢/失败都不阻塞页面渲染（失败也只在自己卡里显示原因）。
-  loadOpenVikingStatus();
-  loadEnvTools();
+  if (!window.NovelKingAccount?.hosted) { loadOpenVikingStatus(); loadEnvTools(); }
 }
 
 const AI_ACTION_LABELS = {
@@ -9118,18 +9119,18 @@ function longTextSaveRun(kind, chapterId, plan, results) {
   try {
     const payload = { v: 1, kind, chapter_id: chapterId || null, at: Date.now(), source_version: plan.source_version, source_chars: plan.source_chars, results };
     const encoded = JSON.stringify(payload);
-    // 候选要能跨刷新续跑；超大数据不硬塞 localStorage（宁可不持久化，也不让浏览器抛配额异常）。
+    // 候选要能跨刷新续跑；超大数据不硬塞 accountLocalStorage（宁可不持久化，也不让浏览器抛配额异常）。
     if (encoded.length > 400000) {
       reportClientLog({ level: 'warn', kind: 'long_text_store_skipped', message: `[长正文] 候选体积 ${encoded.length} 字，超过本地持久化上限，本次不落本地（刷新后需重跑）` });
       return;
     }
-    localStorage.setItem(LONG_TEXT_STORE_KEY, encoded);
+    accountLocalStorage.setItem(LONG_TEXT_STORE_KEY, encoded);
   } catch (e) { /* 持久化失败不阻塞本次处理 */ }
 }
 
 function longTextLoadRun(kind, chapterId, sourceVersion) {
   try {
-    const payload = JSON.parse(localStorage.getItem(LONG_TEXT_STORE_KEY) || 'null');
+    const payload = JSON.parse(accountLocalStorage.getItem(LONG_TEXT_STORE_KEY) || 'null');
     if (!payload || payload.kind !== kind) return null;
     if (String(payload.chapter_id || '') !== String(chapterId || '')) return null;
     if (payload.source_version !== sourceVersion) return null;
@@ -9138,7 +9139,7 @@ function longTextLoadRun(kind, chapterId, sourceVersion) {
 }
 
 function longTextClearRun() {
-  try { localStorage.removeItem(LONG_TEXT_STORE_KEY); } catch (e) {}
+  try { accountLocalStorage.removeItem(LONG_TEXT_STORE_KEY); } catch (e) {}
 }
 
 function longTextCancelRun() {
@@ -13732,7 +13733,7 @@ async function handleAction(action, actionEl, e) {
         break;
       }
       case 'collapse-writing-catalog':
-        state.writingPreferences = NovelKingWriting.savePreferences(localStorage, { ...state.writingPreferences, catalogCollapsed: !state.writingPreferences.catalogCollapsed });
+        state.writingPreferences = NovelKingWriting.savePreferences(accountLocalStorage, { ...state.writingPreferences, catalogCollapsed: !state.writingPreferences.catalogCollapsed });
         applyWritingPreferences();
         break;
 
@@ -13770,7 +13771,7 @@ async function handleAction(action, actionEl, e) {
       // D7：AI 创作页分页签（自动创建 / 工作台 / 历史），切换时只切换区块显隐，保留工作台内容
       case 'ai-create-tab': {
         state.aiCreateHomeTab = actionEl.dataset.tab;
-        try { localStorage.setItem('ns_ai_create_tab', state.aiCreateHomeTab); } catch (_) {}
+        try { accountLocalStorage.setItem('ns_ai_create_tab', state.aiCreateHomeTab); } catch (_) {}
         $$('.board-tabs .board-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === state.aiCreateHomeTab));
         $$('.ai-create-section').forEach((s) => { s.hidden = s.dataset.section !== state.aiCreateHomeTab; });
         if (state.aiCreateHomeTab === 'history') await loadCreationTasks();
@@ -13805,7 +13806,7 @@ async function handleAction(action, actionEl, e) {
         break;
 
       case 'reset-writing-appearance':
-        state.writingPreferences = NovelKingWriting.savePreferences(localStorage, NovelKingWriting.mergeAppearance(state.writingPreferences, $('.writing-appearance')?.dataset.section || 'font', NovelKingWriting.defaults));
+        state.writingPreferences = NovelKingWriting.savePreferences(accountLocalStorage, NovelKingWriting.mergeAppearance(state.writingPreferences, $('.writing-appearance')?.dataset.section || 'font', NovelKingWriting.defaults));
         applyWritingPreferences();
         closeModal();
         break;
@@ -14168,14 +14169,14 @@ async function handleAction(action, actionEl, e) {
         // 在此处只切布局，不把布局状态误当成正文变更。
         if (!(await ensureSavedBeforeNavigation())) break;
         state.editorLayout = actionEl.dataset.layout;
-        localStorage.setItem('ns_editor_layout', state.editorLayout);
+        accountLocalStorage.setItem('ns_editor_layout', state.editorLayout);
         await render();
         break;
       }
 
       case 'set-outline-mode': {
         state.outlineMode = actionEl.dataset.mode;
-        localStorage.setItem('ns_outline_mode', state.outlineMode);
+        accountLocalStorage.setItem('ns_outline_mode', state.outlineMode);
         await render();
         break;
       }
@@ -14586,7 +14587,7 @@ async function handleAction(action, actionEl, e) {
       // 专项 A：词条预览展开/收起（默认折叠为标题）
       case 'ref-preview-toggle': {
         state.refPreview = !state.refPreview;
-        try { localStorage.setItem('ns_ref_preview', state.refPreview ? '1' : '0'); } catch (_) { /* 存储不可用时仅本次会话生效 */ }
+        try { accountLocalStorage.setItem('ns_ref_preview', state.refPreview ? '1' : '0'); } catch (_) { /* 存储不可用时仅本次会话生效 */ }
         actionEl.textContent = state.refPreview ? '收起预览' : '展开预览';
         renderReference(state.refTab);
         break;
@@ -14794,7 +14795,7 @@ async function handleAction(action, actionEl, e) {
 
       case 'set-active-config': {
         state.activeConfigId = Number(actionEl.dataset.id);
-        localStorage.setItem('ns_active_config', String(state.activeConfigId));
+        accountLocalStorage.setItem('ns_active_config', String(state.activeConfigId));
         toast('已设为当前配置', 'success');
         await render();
         break;
@@ -15991,7 +15992,7 @@ document.addEventListener('click', (e) => {
     sidebar.classList.remove('hidden'); // F-13：折叠改用 .collapsed，避免 .hidden 的 display:none 吞掉动画
     state.sidebarCollapsed = !sidebar.classList.contains('collapsed');
     sidebar.classList.toggle('collapsed', state.sidebarCollapsed);
-    try { localStorage.setItem('ns_sidebar_collapsed', state.sidebarCollapsed ? '1' : '0'); } catch (_) {}
+    try { accountLocalStorage.setItem('ns_sidebar_collapsed', state.sidebarCollapsed ? '1' : '0'); } catch (_) {}
     updateSidebarToggleIcon();
     const backdrop = $('#sidebar-backdrop');
     if (backdrop) backdrop.classList.toggle('visible', !state.sidebarCollapsed && window.innerWidth <= 720);
@@ -16000,7 +16001,7 @@ document.addEventListener('click', (e) => {
     state.sidebarCollapsed = true;
     $('#sidebar')?.classList.add('collapsed');
     $('#sidebar-backdrop')?.classList.remove('visible');
-    try { localStorage.setItem('ns_sidebar_collapsed', '1'); } catch (_) {}
+    try { accountLocalStorage.setItem('ns_sidebar_collapsed', '1'); } catch (_) {}
     updateSidebarToggleIcon();
   }
 });
@@ -16153,9 +16154,10 @@ async function init() {
     topbarRight.innerHTML = `<button class="btn small secondary" data-action="open-command-palette" title="搜索（Ctrl/Cmd+K）">⌕ 搜索</button>
       <button class="btn small secondary" data-action="open-global-appearance" title="调整全局配色与界面风格">◐ 外观</button>
       <details class="topbar-more"><summary>⋯</summary><div><button class="btn small trace-btn" id="trace-toggle" data-action="trace-toggle" title="记录操作以排查问题">运行追踪</button>
-      <button class="btn small danger" data-action="shutdown-server" title="关闭服务后本页面将失效">关闭服务</button></div></details>`;
-    applyGlobalAppearance(NovelKingAppearance.read(localStorage), { persist: false });
-    window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', () => { const preferences = NovelKingAppearance.read(localStorage); if (preferences.mode === 'system') applyGlobalAppearance(preferences, { persist: false }); });
+      ${window.NovelKingAccount?.hosted ? '' : '<button class="btn small danger" data-action="shutdown-server" title="关闭服务后本页面将失效">关闭服务</button>'}</div></details>
+      ${window.NovelKingAccount?.hosted ? `<button class="btn small secondary account-trigger" data-account-menu title="我的账号 · 修改密码 / 退出登录">${esc(window.NovelKingAccount.user.username)}</button>` : ''}`;
+    applyGlobalAppearance(NovelKingAppearance.read(accountLocalStorage), { persist: false });
+    window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', () => { const preferences = NovelKingAppearance.read(accountLocalStorage); if (preferences.mode === 'system') applyGlobalAppearance(preferences, { persist: false }); });
   }
   updateSidebarToggleIcon();
   // 🐞 运行追踪：刷新后若后端仍在录制则自动接上；否则只更新按钮显示。
@@ -16178,7 +16180,7 @@ async function init() {
   if (!state.workId) {
     // R06：首页视图（含「借鉴与致谢」）刷新后恢复；没有记录或记录非法时回到「我的作品」。
     let homeView = '';
-    try { homeView = sessionStorage.getItem('ns_home_view') || ''; } catch (_) { /* 存储不可用时静默 */ }
+    try { homeView = accountSessionStorage.getItem('ns_home_view') || ''; } catch (_) { /* 存储不可用时静默 */ }
     state.view = ['works', 'ai-create', 'ai', 'thanks', 'library'].includes(homeView) ? homeView : 'works';
   }
   await render();

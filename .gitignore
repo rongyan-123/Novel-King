@@ -58,3 +58,5 @@ pnpm-lock.yaml
 # 与 .gitignore 顶部 data/ 同源理由：新工具引入新产物时，忽略清单必须跟上，
 # 否则一次 `git add -A` 就会把本地备份目录也推上公开仓库。
 .p1-baseline/fix-backup-*/
+accounts-data/
+.env

@@ -26,6 +26,8 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** @type {{name: string, cmd: string[], why: string}[]} */
 export const CHECKS = [
+  { name: '账户与注册（隔离 HTTP：算术题/限流/登录/数据库与文件隔离/会话撤销/主机工具封锁）', cmd: ['--test', 'scripts/test-accounts-http.mjs'], why: '服务器入口默认拒绝匿名与跨账号访问' },
+  { name: '账户本地草稿与旧数据迁移', cmd: ['--test', 'scripts/test-account-storage.mjs', 'scripts/test-account-migration.mjs', 'scripts/test-account-session-race.mjs', 'scripts/test-hosted-harness.mjs'], why: '浏览器草稿按账号隔离，旧作者数据复制给管理员且不覆盖，会话撤销不能被并发绕过，DSH 主机执行关闭' },
   { name: '文件库（隔离 HTTP：原件/重启/全文/目录/回收站/归属/模型只读/Word/PDF/取消）', cmd: ['--test', 'scripts/test-file-library-http.mjs'], why: '资料持久化与用户整理不依赖模型或记忆库，不覆盖作品正文' },
   { name: '画布双槽快捷键（迁移/组合键/滚轮方向/冲突替换）', cmd: ['--test', 'scripts/test-canvas-shortcuts.mjs'], why: '绑定必须按真实事件解析，清空后不恢复默认，冲突只有明确替换才释放' },
   { name: '全局外观（风格/深浅模式/迁移/持久化）', cmd: ['--test', 'scripts/test-appearance.mjs'], why: '全局外观与正文背景分离，损坏偏好可恢复' },

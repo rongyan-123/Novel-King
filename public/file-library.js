@@ -1,5 +1,6 @@
 /* File library: manual organization; uploading never changes novel chapters or character cards. */
 (() => {
+  const accountLocalStorage = window.NovelKingAccount?.localStorage || localStorage;
   const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const icons = ['◇', '♙', '☷', '▤', '▥', '✎', '⌕', '↗', '✦', '▱'];
   const descriptions = ['地图、势力、体系与历史', '人物档案、关系与成长', '总纲、卷纲、场景与伏笔', '草稿、修订与发布版本', '一书一夹，保存原文与笔记', '开篇、节奏、对白与结构', '查证知识，积累真实细节', '三江、新书与其他榜单记录', '片段、台词、图片与随手记', '书名、简介、投稿与反馈'];
@@ -8,8 +9,8 @@
   const button = (label, action, id = '', extra = '') => `<button type="button" class="btn secondary small" data-fl-action="${action}" data-id="${escapeHTML(id)}" ${extra}>${label}</button>`;
   const formField = (label, input) => `<label class="fl-field"><span>${label}</span>${input}</label>`;
   const locationKey = 'novelking.fileLibrary.location';
-  const readStored = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
-  const writeStored = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; } };
+  const readStored = key => { try { return JSON.parse(accountLocalStorage.getItem(key)); } catch { return null; } };
+  const writeStored = (key, value) => { try { accountLocalStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; } };
   let current;
   class FileLibrary {
     constructor(root, options) {
@@ -250,7 +251,7 @@
       const snapshot = this.dirty && this.editorSnapshot();
       if (snapshot && !writeStored(this.draftKey(), snapshot) && !this.storageWarning) { this.storageWarning = true; this.options.toast('浏览器无法保存本地草稿，请先保存到服务器或下载编辑稿。'); }
     }
-    removeDraft() { try { localStorage.removeItem(this.draftKey()); } catch { /* The original and server edit are independent of local storage. */ } }
+    removeDraft() { try { accountLocalStorage.removeItem(this.draftKey()); } catch { /* The original and server edit are independent of local storage. */ } }
     updateCount() { const counter = this.root.querySelector('[data-fl-word-count]'), editor = this.root.querySelector('[data-fl-editor]'); if (counter && editor) counter.textContent = `${editor.innerText.replace(/\s/g, '').length} 字`; }
     changed() {
       this.dirty = true; this.keepDraft(); this.updateCount(); clearTimeout(this.saveTimer);
@@ -275,7 +276,7 @@
             if (!this.active()) {
               const draft = readStored('novelking.fileLibrary.draft.' + id);
               if (draft?.revision === snapshot.revision) {
-                if (draft.html === snapshot.html && draft.text === snapshot.text) { try { localStorage.removeItem('novelking.fileLibrary.draft.' + id); } catch {} }
+                if (draft.html === snapshot.html && draft.text === snapshot.text) { try { accountLocalStorage.removeItem('novelking.fileLibrary.draft.' + id); } catch {} }
                 else writeStored('novelking.fileLibrary.draft.' + id, { ...draft, revision: saved.revision });
               }
               return false;
