@@ -960,6 +960,7 @@ try {
   // 否则 app.js 里的分段模块会缺失（而这个缺失本身是**故意**的硬失败，不是静默降级）。
   const longTextSrc = fs.readFileSync(path.join(repoRoot, 'public', 'long-text.js'), 'utf8');
   new vm.Script(longTextSrc, { filename: 'long-text.js' }).runInContext(ctx, { timeout: 10000 });
+  new vm.Script(fs.readFileSync(path.join(repoRoot, 'public', 'writing-workspace.js'), 'utf8'), { filename: 'writing-workspace.js' }).runInContext(ctx, { timeout: 10000 });
   new vm.Script(src + probeSrc, { filename: 'app.js' }).runInContext(ctx, { timeout: 20000 });
 } catch (e) {
   runtimeError = e;

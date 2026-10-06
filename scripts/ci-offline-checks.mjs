@@ -26,6 +26,8 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** @type {{name: string, cmd: string[], why: string}[]} */
 export const CHECKS = [
+  { name: '写作工作台交互（偏好/创建去重/发布文本/查找）', cmd: ['--test', 'scripts/test-writing-workspace.mjs'], why: '写作偏好不污染正文，失败及快速连点可恢复' },
+  { name: '空稿原子创建（隔离 HTTP：首章/兼容/事务回滚）', cmd: ['--test', 'scripts/test-blank-work-http.mjs'], why: '作品及第一章必须同时落库' },
   { name: '装配器单元测试（边界与溢出分支）', cmd: ['.p1-baseline/test-assembler.mjs'], why: '上下文装配的唯一入口' },
   { name: '上下文清单/完整性/溯源（含阴性对照）', cmd: ['.p1-baseline/test-context-manifest.mjs'], why: '清单必须与真实发送的上下文一致' },
   { name: '记忆压缩提示词输入（含阴性对照）', cmd: ['.p1-baseline/test-memory-compress-prompt.mjs'], why: '压缩输入不得只剩标题' },

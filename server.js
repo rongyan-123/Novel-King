@@ -9245,6 +9245,10 @@ async function handleStoryStateRoute({ segments, method, query, req, res }) {
             StoryState.setEnabled(newId, true, '新作品默认开启（可由作者关闭）');
           }
           const row = prepare(`SELECT * FROM ${resource === 'relations' ? 'character_relations' : resource} WHERE id = ?`).get(newId);
+          // 快速开稿与作品使用同一事务；普通创建接口仍只创建作品。
+          if (resource === 'works' && body.initial_chapter === true) {
+            row.initial_chapter_id = insertRow('chapters', { work_id: newId, title: '第1章', content: '', position: 0 });
+          }
           // T2（W9）：通用 CRUD 新建章节也可能**带正文**（前端「创作工作台成果」流程即如此）。
           // 与其它入口同一后处理：内容非空才建 revision + pending 提案（origin=chapter_create）。
           if (resource === 'chapters' && typeof body.content === 'string' && body.content.trim()) {

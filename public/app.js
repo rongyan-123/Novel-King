@@ -85,6 +85,9 @@ const state = {
   editorLayout: localStorage.getItem('ns_editor_layout') || 'two',
   // 参考面板：当前页签 + 词条预览默认折叠为标题（专项 A）
   refTab: 'terms',
+  writingTool: null,
+  writingPreferences: null,
+  quickChapterPending: false,
   refPreview: localStorage.getItem('ns_ref_preview') === '1',
   outlineMode: localStorage.getItem('ns_outline_mode') || 'mind',
   settingsTab: 'terms',
@@ -1106,6 +1109,8 @@ function setActiveNav() {
 
 async function renderView() {
   const content = $('#content');
+  content.classList.remove('king-workspace');
+  document.body.classList.remove('king-writing-active');
   if (state.view !== 'logs') {
     // F-31：离开日志页时清理自动刷新定时器，避免在其它页面空轮询。
     if (logsAutoTimer) { clearInterval(logsAutoTimer); logsAutoTimer = null; }
@@ -1161,7 +1166,7 @@ async function renderView() {
     }
     state.view = 'works';
     updateSidebarTitle();
-    setTopbarTitle('Novel Studio');
+    setTopbarTitle('Novel-King');
     setActiveNav();
     return renderWorks();
   }
@@ -3034,115 +3039,212 @@ async function renderOutline(content) {
 }
 
 // ---------- writing view ----------
+let startBlankWorkRequest;
+async function startBlankWork(actionEl) {
+  if (!(await ensureSavedBeforeNavigation())) return;
+  startBlankWorkRequest ||= NovelKingWriting.createWorkStarter(api);
+  if (actionEl) actionEl.disabled = true;
+  try {
+    const work = await startBlankWorkRequest();
+    state.workId = work.id;
+    state.work = work;
+    state.loadedWorkId = null;
+    state.currentChapterId = work.initial_chapter_id;
+    state.view = 'writing';
+    state.writingTool = null;
+    await loadWorks(true);
+    await render();
+    $('#editor-content')?.focus();
+  } finally { if (actionEl) actionEl.disabled = false; }
+}
+
+async function createQuickChapter(actionEl) {
+  if (state.quickChapterPending) return;
+  state.quickChapterPending = true;
+  if (actionEl) actionEl.disabled = true;
+  try {
+    if (!(await ensureSavedBeforeNavigation())) return;
+    const current = state.chapters.find((chapter) => chapter.id === state.currentChapterId);
+    const position = state.chapters.reduce((highest, chapter) => Math.max(highest, Number(chapter.position) || 0), -1) + 1;
+    const chapter = await api('/chapters', { method: 'POST', body: { work_id: state.workId, volume_id: current?.volume_id || null, title: `第${state.chapters.length + 1}章`, content: '', position } });
+    upsertState('chapters', chapter);
+    state.currentChapterId = chapter.id;
+    await render();
+    $('#editor-title')?.focus();
+  } finally { state.quickChapterPending = false; if (actionEl) actionEl.disabled = false; }
+}
+
+function applyWritingPreferences() {
+  const workspace = $('#content.king-workspace');
+  if (!workspace) return;
+  const preferences = state.writingPreferences ||= NovelKingWriting.readPreferences(localStorage);
+  workspace.dataset.writingTheme = preferences.theme;
+  for (const [property, value] of Object.entries({
+    '--writing-font': preferences.font, '--writing-font-size': `${preferences.fontSize}px`,
+    '--writing-line-height': preferences.lineHeight, '--writing-width': `${preferences.width}px`,
+    '--writing-margin': `${preferences.margin}px`, '--writing-background': preferences.background || '',
+    '--writing-image': preferences.image ? `url("${preferences.image}")` : 'none',
+  })) workspace.style.setProperty(property, String(value));
+}
+
+function openWritingAppearance(section = 'font') {
+  const preferences = state.writingPreferences ||= NovelKingWriting.readPreferences(localStorage);
+  const numeric = (key, label, minimum, maximum, step = 1) => `<div class="field"><label>${label}</label><input name="${key}" type="number" min="${minimum}" max="${maximum}" step="${step}" value="${preferences[key]}"></div>`;
+  openModal({ title: section === 'background' ? '写作背景' : '字体与排版', body: `<div class="form-grid">
+    <div class="field full"><label>字体</label><select name="font">${NovelKingWriting.fonts.map((font, index) => `<option value="${esc(font)}" ${preferences.font === font ? 'selected' : ''}>${['微软雅黑', '宋体', '楷体', 'Arial'][index]}</option>`).join('')}</select></div>
+    <div class="field full"><label>自定义字体名称（可选，使用设备已安装的字体）</label><input name="customFont" value="${esc(NovelKingWriting.fonts.includes(preferences.font) ? '' : preferences.font)}" placeholder="例如：霞鹜文楷、Noto Serif SC"></div>
+    ${numeric('fontSize', '字号', 14, 36)}${numeric('lineHeight', '行距', 1.2, 3, 0.1)}
+    ${numeric('width', '正文宽度', 480, 1400, 20)}${numeric('margin', '左右边距', 12, 200, 4)}
+    <div class="field"><label>配色</label><select name="theme">${[['navy', '深蓝'], ['paper', '纸色'], ['green', '护眼']].map(([key, label]) => `<option value="${key}" ${preferences.theme === key ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
+    <div class="field"><label class="row"><input name="useCustomBackground" type="checkbox" ${preferences.background ? 'checked' : ''}>自定义底色</label><input name="background" type="color" value="${preferences.background || { navy: '#222d3d', paper: '#faf7ee', green: '#e4eddf' }[preferences.theme]}"></div>
+    <div class="field full"><label>背景图片</label><input id="writing-background-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><span class="muted">选择本机图片，最大 2 MB。${preferences.image ? '已有背景图；未选择时保留。' : ''}</span><label class="row"><input type="checkbox" name="clearImage">移除背景图片</label></div>
+    </div>`, footer: '<button class="btn secondary" data-close-modal>取消</button><button class="btn secondary" data-action="reset-writing-appearance">恢复默认</button><button class="btn" data-action="save-writing-appearance">应用</button>' });
+}
+
+async function saveWritingAppearance() {
+  const values = collectModalData($('.modal'));
+  if (String(values.customFont || '').trim()) values.font = values.customFont.trim();
+  if (!$('.modal input[name="useCustomBackground"]')?.checked) values.background = '';
+  const selected = $('#writing-background-file')?.files?.[0];
+  let image = state.writingPreferences?.image || '';
+  if ($('.modal input[name="clearImage"]')?.checked) image = '';
+  if (selected) {
+    if (selected.size > 2 * 1024 * 1024 || !/^image\/(png|jpeg|webp|gif)$/.test(selected.type)) throw new Error('请选择不超过 2 MB 的 PNG、JPEG、WebP 或 GIF 图片');
+    image = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('图片读取失败'));
+      reader.readAsDataURL(selected);
+    });
+  }
+  state.writingPreferences = NovelKingWriting.savePreferences(localStorage, { ...values, image });
+  applyWritingPreferences();
+  closeModal();
+}
+
+function closeWritingDrawers() {
+  $('#writing-layout')?.classList.remove('catalog-open', 'reference-open');
+  state.writingTool = null;
+  $$('.workspace-rail button').forEach((button) => button.setAttribute('aria-pressed', 'false'));
+}
+
+function toggleWritingTool(tab) {
+  const layout = $('#writing-layout');
+  if (!layout) return;
+  const active = state.writingTool !== tab;
+  state.writingTool = active ? tab : null;
+  layout.classList.remove('catalog-open');
+  layout.classList.toggle('reference-open', active);
+  $$('.workspace-rail button').forEach((button) => button.setAttribute('aria-pressed', String(active && button.dataset.tab === tab)));
+  if (active) renderReference(tab);
+}
+
+function findWritingText() {
+  const editor = $('#editor-content');
+  const query = $('#writing-find-query')?.value || '';
+  if (!editor || !query) return;
+  const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  let text = '', node;
+  while ((node = walker.nextNode())) { nodes.push({ node, start: text.length }); text += node.textContent; }
+  const searchKey = `${state.currentChapterId}:${query}`;
+  const match = NovelKingWriting.findMatch(text, query, state.writingFindKey === searchKey ? state.writingFindOffset || 0 : 0);
+  const status = $('#writing-find-status');
+  if (!match) { if (status) status.textContent = '未找到'; return; }
+  const start = nodes.find((part) => part.start + part.node.textContent.length > match.start);
+  const end = nodes.find((part) => part.start + part.node.textContent.length >= match.end);
+  if (!start || !end) return;
+  const range = document.createRange();
+  range.setStart(start.node, match.start - start.start);
+  range.setEnd(end.node, match.end - end.start);
+  const selection = window.getSelection();
+  selection.removeAllRanges(); selection.addRange(range);
+  state.savedRange = range.cloneRange();
+  const scroll = $('.manuscript-scroll');
+  const bounds = range.getBoundingClientRect(), viewport = scroll.getBoundingClientRect();
+  scroll.scrollTop += bounds.top - viewport.top - viewport.height / 3;
+  state.writingFindKey = searchKey; state.writingFindOffset = match.end;
+  if (status) status.textContent = '已定位';
+}
+
+function writingIcon(name) {
+  const paths = {
+    font: '<path d="M4 5h16M12 5v14M8 19h8"/>',
+    background: '<path d="m9 3-6 4 3 5 2-1v9h8v-9l2 1 3-5-6-4c0 4-6 4-6 0Z"/>',
+    undo: '<path d="m8 5-5 5 5 5M3 10h11a6 6 0 0 1 0 12"/>',
+    redo: '<path d="m16 5 5 5-5 5M21 10H10a6 6 0 0 0 0 12"/>',
+    layout: '<path d="M4 5h16M8 10h12M4 15h16M8 20h12"/>',
+    find: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+    save: '<path d="M4 3h13l4 4v14H3V3h1ZM7 3v6h10V3M7 21v-8h10v8"/>',
+    history: '<path d="M3 4v6h6M3 10a9 9 0 1 1 0 5M12 7v5l3 2"/>',
+    copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
+    export: '<path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/>',
+    outline: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h8M8 17h5"/>',
+    character: '<circle cx="12" cy="7" r="4"/><path d="M4 21v-3a8 8 0 0 1 16 0v3"/>',
+    terms: '<path d="M5 3h14v18H5zM9 7h6M9 12h6M9 17h4"/>',
+    ai: '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>',
+    state: '<path d="M4 18V9M10 18V4M16 18v-7M22 18V6"/>',
+    focus: '<path d="M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6"/>',
+  };
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.outline}</svg>`;
+}
+
 async function renderWriting(content) {
   const chapters = state.chapters;
   const volumes = state.volumes;
   if (!state.currentChapterId && chapters.length) state.currentChapterId = chapters[0].id;
-  const current = state.currentChapterId ? chapters.find((c) => c.id === state.currentChapterId) : null;
-  setTopbarTitle(state.work ? state.work.title : '作品');
-  // F-27：预构建索引，避免每个卷/未分卷节点都全量 filter chapters（O(N²)→O(N)）。
-  const { rootsOfVolume } = buildChapterIndex();
-  const rootsOfVolumeFn = (vid) => rootsOfVolume.get(vid) || [];
+  const current = chapters.find((chapter) => chapter.id === state.currentChapterId);
+  setTopbarTitle(state.work?.title || '作品');
+  content.classList.add('king-workspace');
+  document.body.classList.add('king-writing-active');
+  const { byParent, rootsOfVolume } = buildChapterIndex();
+  const chapterRow = (chapter, depth = 0) => `<li><button class="workspace-chapter ${chapter.id === current?.id ? 'active' : ''}" data-action="open-chapter" data-id="${chapter.id}" data-chapter-title="${esc(chapter.title.toLowerCase())}" style="--chapter-depth:${depth}"><span class="workspace-chapter-name">${esc(chapter.title)}</span><span class="workspace-chapter-count">${chapterWordCount(chapter)}</span></button>${(byParent.get(chapter.id) || []).length ? `<ul>${byParent.get(chapter.id).map((child) => chapterRow(child, depth + 1)).join('')}</ul>` : ''}</li>`;
+  const groups = volumes.map((volume) => `<section class="workspace-volume"><button class="workspace-volume-title" data-action="edit-volume" data-id="${volume.id}"><span>▱ ${esc(volume.title)}</span><span>${(rootsOfVolume.get(volume.id) || []).length}章</span></button><ul>${(rootsOfVolume.get(volume.id) || []).map((chapter) => chapterRow(chapter)).join('')}</ul></section>`).join('');
   const unassigned = rootsOfVolume.get(null) || [];
-
-  const treeHTML = `
-    <div class="row mb-8">
-      <b>目录 / 大纲</b>
-      <div class="grow"></div>
-      <button class="btn small" data-action="new-chapter">＋</button>
-    </div>
-    ${volumes.length ? volumes.map((v) => `
-      <div class="muted" style="padding:6px 8px">📚 ${esc(v.title)}</div>
-      <ul class="tree">
-        ${rootsOfVolumeFn(v.id).length ? rootsOfVolumeFn(v.id).map((c) => `
-          <li><div class="tree-item ${current && current.id === c.id ? 'active' : ''}" data-action="open-chapter" data-id="${c.id}">📄 ${esc(c.title)}</div></li>
-        `).join('') : '<li class="muted" style="padding:2px 8px">空</li>'}
-      </ul>
-    `).join('') : ''}
-    <div class="muted" style="padding:6px 8px">未分卷</div>
-    <ul class="tree">
-      ${unassigned.map((c) => `
-        <li><div class="tree-item ${current && current.id === c.id ? 'active' : ''}" data-action="open-chapter" data-id="${c.id}">📄 ${esc(c.title)}</div></li>
-      `).join('') || '<li class="muted" style="padding:2px 8px">暂无章节</li>'}
-    </ul>`;
-
+  const toolbarButton = (action, label, icon, extra = '') => `<button class="workspace-button" data-action="${action}" ${extra}>${writingIcon(icon)}<span>${label}</span></button>`;
+  const tools = [['outline', '大纲', 'outline'], ['characters', '角色', 'character'], ['terms', '设定', 'terms'], ['foreshadows', '伏笔', 'find'], ['redlines', '红线', 'outline'], ['state', '状态', 'state'], ['context', '上下文', 'copy'], ['ai', 'AI', 'ai']];
   content.innerHTML = `
-    <div class="writing-head page-head">
-      <div>
-        <div class="writing-breadcrumb"><span>写作台</span><span aria-hidden="true">/</span><b>${esc(current ? current.title : '未选择章节')}</b></div>
-        <div class="page-sub">正文保存与故事状态分开显示；参考资料按需展开</div>
-      </div>
-      <div class="page-actions">
-        <div class="row" style="gap:4px">
-          <button class="btn small ${state.editorLayout === 'single' ? '' : 'secondary'}" data-action="set-layout" data-layout="single">单栏</button>
-          <button class="btn small ${state.editorLayout === 'two' ? '' : 'secondary'}" data-action="set-layout" data-layout="two">两栏</button>
-          <button class="btn small ${state.editorLayout === 'three' ? '' : 'secondary'}" data-action="set-layout" data-layout="three">三栏</button>
-        </div>
-        <button class="btn small secondary" data-action="focus-mode">专注模式</button>
-        <button class="btn secondary" data-action="go-view" data-view="outline">大纲</button>
-        <button class="btn" data-action="new-chapter">＋ 新章节</button>
-      </div>
-    </div>
-    ${!current ? '<div class="empty">还没有章节，请先新建一个章节。</div>' : `
-    <div class="writing-layout ${state.editorLayout}" id="writing-layout">
-      <div class="panel panel-outline">${treeHTML}</div>
-      <div class="panel panel-editor">
-        <div class="editor-toolbar">
-          <div class="toolbar-group" title="格式">
-            <button class="btn secondary small" data-action="format" data-format="bold"><b>B</b></button>
-            <button class="btn secondary small" data-action="format" data-format="italic"><i>I</i></button>
-            <button class="btn secondary small" data-action="format" data-format="underline"><u>U</u></button>
-            <button class="btn secondary small" data-action="format" data-format="formatBlock" data-value="h2">H2</button>
-            <button class="btn secondary small" data-action="format" data-format="formatBlock" data-value="blockquote">引用</button>
-            <button class="btn secondary small" data-action="format" data-format="insertUnorderedList">列表</button>
-            <button class="btn secondary small" data-action="format" data-format="insertOrderedList">编号</button>
-          </div>
-          <span class="toolbar-sep"></span>
-          <div class="toolbar-group" title="AI 生成">
-            <button class="btn small" data-action="toolbar-ai-write"${helpTitle('slow_channel')}>✍️ AI 写作</button>
-            <button class="btn small secondary" data-action="toolbar-ai-polish"${helpTitle('direct_channel')}>✨ 润色</button>
-            <button class="btn small secondary" data-action="toolbar-ai-expand"${helpTitle('direct_channel')}>📖 扩写</button>
-          </div>
-          <span class="toolbar-sep"></span>
-          <div class="toolbar-group" title="文档操作">
-            <button class="btn small" data-action="manual-save-chapter">💾 手动保存</button>
-            <button class="btn small secondary" data-action="open-save-history">🕘 历史版本</button>
-            <button class="btn small" data-action="link-term-modal">🔗 关联设定</button>
-            <button class="btn small secondary" data-action="export-chapter-txt" data-id="${current.id}" title="导出本章为 TXT">📤 本章</button>
-            ${state.editorLayout === 'single' ? `<select id="chapter-switcher" title="单栏布局下目录被隐藏，用这里切换章节" style="max-width:200px">${chapters.map((c) => `<option value="${c.id}" ${c.id === current.id ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select>` : ''}
-          </div>
-        </div>
-        <div class="editor-meta">
-          <input id="editor-title" value="${esc(current.title)}" placeholder="章节/场景标题">
-        </div>
-        <div id="chapter-recovery">${recoveryBarHtml(current)}</div>
-        <div id="editor-content" class="editor-content" contenteditable="true" data-chapter-id="${current.id}">${sanitizeEditorHtml(current.content)}</div>
-        <div class="editor-status" id="editor-status"><span>已加载</span> · <span id="editor-count">${wordCount(current.content)}</span> 字</div>
-        <div id="chapter-state-panel" class="chapter-state-panel" data-chapter-id="${current.id}" data-boundary="after"><div class="muted">正在读取本章状态…</div></div>
-      </div>
-      <div class="panel panel-reference">
-        <div class="reference-tabs reference-groups">
-          <button class="active" data-action="ref-tab" data-tab="terms">参考</button>
-          <button data-action="ref-tab" data-tab="context"${helpTitle('context_preview')}>上下文</button>
-          <button data-action="ref-tab" data-tab="ai">AI 工具</button>
-          <span class="grow"></span>
-          <button class="btn small secondary" data-action="ref-preview-toggle" title="展开/收起设定词条的内容预览">${state.refPreview ? '收起预览' : '展开预览'}</button>
-        </div>
-        <div class="reference-subtabs" aria-label="参考类别">
-          <button class="active" data-action="ref-tab" data-tab="terms">设定</button>
-          <button data-action="ref-tab" data-tab="characters">角色</button>
-          <button data-action="ref-tab" data-tab="foreshadows"${helpTitle('event_ledger')}>伏笔</button>
-          <button data-action="ref-tab" data-tab="redlines"${helpTitle('redline')}>红线</button>
-        </div>
-        <div class="reference-list" id="reference-list"></div>
-      </div>
-    </div>
-    `}`;
+    <header class="workspace-titlebar">
+      <button class="workspace-brand" data-action="back-works" title="返回书架">▰ <span>Novel-King</span></button><span class="workspace-title-divider"></span>
+      <input id="writing-work-name" value="${esc(state.work?.title || '未命名作品')}" aria-label="作品名称" title="修改作品名称">
+      <span class="grow"></span><span class="workspace-autosave-label">自动保存已开启</span>
+      <button class="workspace-button workspace-title-action" data-action="edit-work" data-id="${state.workId}">作品设置</button>
+      <button class="workspace-button workspace-title-action" data-action="open-command-palette" title="命令面板 Ctrl / Cmd + K">⌘ K</button>
+    </header>
+    <nav class="workspace-toolbar" aria-label="写作工具栏">
+      <button class="workspace-button workspace-mobile-catalog" data-action="toggle-writing-catalog">☰ <span>目录</span></button>
+      ${toolbarButton('writing-font', '字体', 'font')}${toolbarButton('writing-background', '背景', 'background')}
+      <span class="workspace-toolbar-divider"></span>
+      ${toolbarButton('writing-undo', '', 'undo', 'title="撤销 Ctrl / Cmd + Z" aria-label="撤销"')}${toolbarButton('writing-redo', '', 'redo', 'title="重做" aria-label="重做"')}
+      ${toolbarButton('writing-format', '排版', 'layout')}
+      <button class="workspace-button" data-action="format" data-format="bold" title="加粗"><b>B</b></button>
+      <button class="workspace-button" data-action="format" data-format="italic" title="斜体"><i>I</i></button>
+      <span class="grow workspace-toolbar-spacer"></span>
+      ${toolbarButton('writing-find', '查找', 'find', 'title="查找正文 Ctrl / Cmd + F"')}
+      ${toolbarButton('manual-save-chapter', '保存', 'save', 'title="保存 Ctrl / Cmd + S"')}${toolbarButton('open-save-history', '历史', 'history')}
+      ${toolbarButton('writing-copy', '复制正文', 'copy')}${toolbarButton('export-chapter-txt', '导出 TXT', 'export', `data-id="${current?.id || ''}"`)}
+      ${toolbarButton('focus-mode', '专注', 'focus')}
+    </nav>
+    <div id="writing-find-bar" class="workspace-find" hidden><input id="writing-find-query" placeholder="查找本章文字" aria-label="查找本章文字"><button class="workspace-button" data-action="writing-find-next">下一处</button><span id="writing-find-status" aria-live="polite"></span><button class="workspace-button" data-action="writing-find-close" aria-label="关闭查找">✕</button></div>
+    <div class="writing-layout workspace-body ${state.writingTool ? 'reference-open' : ''}" id="writing-layout">
+      <aside class="panel panel-outline" aria-label="卷章目录">
+        <div class="workspace-catalog-head"><input id="writing-chapter-search" type="search" placeholder="搜索章节" aria-label="搜索章节"><div class="workspace-catalog-actions"><button data-action="quick-chapter">＋ 新建章</button><button data-action="new-volume">新建卷</button></div><div class="workspace-catalog-label">草稿 <span>${chapters.length}章</span></div></div>
+        <div class="workspace-catalog">${groups}${unassigned.length ? `<section class="workspace-volume"><div class="workspace-volume-title"><span>▱ ${volumes.length ? '未分卷' : '正文'}</span><span>${unassigned.length}章</span></div><ul>${unassigned.map((chapter) => chapterRow(chapter)).join('')}</ul></section>` : ''}${!chapters.length ? '<p class="muted">点击新建章，开始写作。</p>' : ''}</div>
+        <button class="workspace-catalog-bottom" data-action="quick-chapter">＋ 新建章节</button>
+      </aside>
+      <section class="panel panel-editor" aria-label="正文编辑器">
+        <div id="chapter-recovery">${current ? recoveryBarHtml(current) : ''}</div>
+        ${current ? `<div class="manuscript-scroll"><div class="manuscript-page"><input id="editor-title" value="${esc(current.title)}" placeholder="章节标题" aria-label="章节标题"><div id="editor-content" class="editor-content" contenteditable="true" role="textbox" aria-multiline="true" aria-label="章节正文" data-placeholder="请输入正文" data-chapter-id="${current.id}">${sanitizeEditorHtml(current.content)}</div></div></div><footer class="workspace-statusbar"><div class="editor-status" id="editor-status"><span>已保存</span> · <span id="editor-count">${wordCount(current.content)}</span> 字</div><span class="workspace-status-hint">Ctrl S 保存 · Ctrl F 查找</span></footer>` : '<div class="workspace-empty"><p>打开一份空白稿，开始你的故事。</p><button class="btn" data-action="quick-chapter">＋ 新建章节</button></div>'}
+      </section>
+      <aside class="panel panel-reference" aria-label="写作参考面板"><header class="workspace-reference-head"><b id="writing-reference-title">参考</b><button class="workspace-button" data-action="close-writing-drawers" aria-label="关闭参考面板">✕</button></header><div class="workspace-reference-content"><div class="reference-list" id="reference-list"></div><div id="chapter-state-panel" class="chapter-state-panel" data-chapter-id="${current?.id || ''}" data-boundary="after"></div></div></aside>
+      <nav class="workspace-rail" aria-label="写作辅助工具">${tools.map(([tab, label, icon]) => `<button data-action="writing-tool" data-tab="${tab}" aria-pressed="${state.writingTool === tab}"${tab === 'foreshadows' ? helpTitle('event_ledger') : tab === 'redlines' ? helpTitle('redline') : tab === 'context' ? helpTitle('context_preview') : ` title="${label}"`}>${writingIcon(icon)}<span>${label}</span></button>`).join('')}<span class="workspace-rail-divider"></span><button data-action="link-term-modal" title="关联正文与设定">${writingIcon('terms')}<span>关联</span></button></nav>
+      <button class="workspace-drawer-backdrop" data-action="close-writing-drawers" aria-label="关闭目录或参考面板"></button>
+    </div>`;
+  applyWritingPreferences();
   if (current) {
-    renderReference('terms');
     bindEditorEvents();
-    // T6：章末状态面板独立异步加载（不阻塞编辑器；迟到响应由 seq 防护拦下）。
     refreshChapterStatePanel(current.id);
+    if (state.writingTool) renderReference(state.writingTool);
   }
 }
 
@@ -3402,10 +3504,19 @@ function renderReference(tab = 'terms') {
   const list = $('#reference-list');
   if (!list) return;
   state.refTab = tab;
+  const panel = $('.panel-reference');
+  if (panel) panel.dataset.refTab = tab;
+  const heading = $('#writing-reference-title');
+  if (heading) heading.textContent = { outline: '剧情大纲', characters: '角色', terms: '设定', foreshadows: '伏笔', redlines: '写作红线', state: '故事状态', context: '创作上下文', ai: 'AI 助手' }[tab] || '参考';
   $$('.reference-tabs button[data-action="ref-tab"], .reference-subtabs button[data-action="ref-tab"]').forEach((b) => {
     b.classList.toggle('active', b.dataset.tab === tab);
   });
-  if (tab === 'terms') {
+  if (tab === 'state') {
+    list.innerHTML = '';
+    refreshChapterStatePanel(state.currentChapterId);
+  } else if (tab === 'outline') {
+    list.innerHTML = `<button class="btn small secondary" data-action="go-view" data-view="outline">管理大纲</button>${state.chapters.map((chapter) => `<div class="reference-item" data-action="open-chapter" data-id="${chapter.id}"><b>${esc(chapter.title)}</b><p class="ref-desc">${esc(chapter.summary || '还没有章纲')}</p></div>`).join('')}`;
+  } else if (tab === 'terms') {
     // 专项 A：词条默认折叠为标题（一行一条），需要预览时点右上角「展开预览」
     list.innerHTML = `
       <div class="muted" style="padding:4px 2px">点击词条查看详情；写作时可选中文字后点“关联设定”</div>
@@ -3433,6 +3544,8 @@ function renderReference(tab = 'terms') {
   } else if (tab === 'ai') {
     list.innerHTML = `
       <div class="ai-panel">
+        <button class="btn small" data-action="toolbar-ai-write"${helpTitle('slow_channel')}>AI 写本章</button>
+        <div class="row"><button class="btn small secondary grow" data-action="toolbar-ai-polish"${helpTitle('direct_channel')}>润色</button><button class="btn small secondary grow" data-action="toolbar-ai-expand"${helpTitle('direct_channel')}>扩写</button></div>
         <label class="muted">写作指令 / 补充要求（可留空）</label>
         <textarea id="ai-prompt" placeholder="例如：写出主角第一次觉醒天赋的场景，节奏先缓后急"></textarea>
         <div class="row">
@@ -13442,7 +13555,85 @@ async function handleAction(action, actionEl, e) {
       }
 
       case 'new-work':
-        openWorkModal();
+        await startBlankWork(actionEl);
+        break;
+
+      case 'quick-chapter':
+        await createQuickChapter(actionEl);
+        break;
+
+      case 'writing-font':
+      case 'writing-background':
+        openWritingAppearance(action === 'writing-background' ? 'background' : 'font');
+        break;
+
+      case 'save-writing-appearance':
+        await saveWritingAppearance();
+        break;
+
+      case 'reset-writing-appearance':
+        state.writingPreferences = NovelKingWriting.savePreferences(localStorage, NovelKingWriting.defaults);
+        applyWritingPreferences();
+        closeModal();
+        break;
+
+      case 'writing-tool':
+        toggleWritingTool(actionEl.dataset.tab);
+        break;
+
+      case 'toggle-writing-catalog': {
+        const layout = $('#writing-layout');
+        const show = !layout?.classList.contains('catalog-open');
+        closeWritingDrawers();
+        layout?.classList.toggle('catalog-open', show);
+        break;
+      }
+
+      case 'close-writing-drawers':
+        closeWritingDrawers();
+        break;
+
+      case 'writing-copy':
+        await NovelKingWriting.copyPlainText($('#editor-content'), navigator.clipboard);
+        toast('已复制正文，保留段落', 'success');
+        break;
+
+      case 'writing-undo':
+      case 'writing-redo':
+        if (state.editorComposing) break;
+        $('#editor-content')?.focus();
+        document.execCommand(action === 'writing-undo' ? 'undo' : 'redo');
+        scheduleSave();
+        break;
+
+      case 'writing-format': {
+        const editor = $('#editor-content');
+        if (!editor || state.editorComposing) break;
+        const plain = NovelKingWriting.publicationText(editor.innerText);
+        if (!plain.trim()) break;
+        editor.focus();
+        const selection = window.getSelection(), range = document.createRange();
+        range.selectNodeContents(editor);
+        selection.removeAllRanges(); selection.addRange(range);
+        document.execCommand('insertHTML', false, textToParagraphsHtml(plain));
+        scheduleSave();
+        break;
+      }
+
+      case 'writing-find': {
+        const bar = $('#writing-find-bar');
+        if (bar) bar.hidden = !bar.hidden;
+        if (bar && !bar.hidden) $('#writing-find-query')?.focus();
+        break;
+      }
+
+      case 'writing-find-close':
+        if ($('#writing-find-bar')) $('#writing-find-bar').hidden = true;
+        $('#editor-content')?.focus();
+        break;
+
+      case 'writing-find-next':
+        findWritingText();
         break;
 
       case 'import-work': {
@@ -15340,6 +15531,18 @@ const debouncedSearch = debounce(async () => {
 }, 300);
 
 document.addEventListener('change', async (e) => {
+  if (e.target.id === 'writing-work-name') {
+    const title = e.target.value.trim();
+    const previous = state.work?.title || '未命名作品';
+    if (!title) { e.target.value = previous; return; }
+    const workId = state.workId;
+    try {
+      const work = await api(`/works/${workId}`, { method: 'PUT', body: { title } });
+      upsertState('works', work);
+      if (state.workId === workId) { state.work = work; setTopbarTitle(title); updateSidebarTitle(); }
+    } catch (error) { e.target.value = previous; toast(`名称保存失败：${error.message}`, 'error'); }
+    return;
+  }
   if (e.target.matches('[data-action="semantic-toggle"]')) {
     try {
       await api('/novel/semantic', { method: 'PUT', body: { enabled: e.target.checked } });
@@ -15388,6 +15591,16 @@ document.addEventListener('change', async (e) => {
 });
 
 document.addEventListener('input', (e) => {
+  if (e.target.name === 'background' && $('.modal input[name="useCustomBackground"]')) $('.modal input[name="useCustomBackground"]').checked = true;
+  if (e.target.id === 'writing-chapter-search') {
+    const query = e.target.value.trim().toLowerCase();
+    $$('.workspace-chapter').forEach((button) => { button.hidden = !!query && !button.dataset.chapterTitle.includes(query); });
+    return;
+  }
+  if (e.target.id === 'editor-title' && state.view === 'writing') {
+    const selected = $(`.workspace-chapter[data-id="${state.currentChapterId}"]`);
+    if (selected) { selected.dataset.chapterTitle = e.target.value.toLowerCase(); selected.querySelector('.workspace-chapter-name').textContent = e.target.value; }
+  }
   if (e.target.id === 'works-filter') {
     state.worksQuery = String(e.target.value || '');
     const q = state.worksQuery.trim().toLowerCase();
@@ -15586,6 +15799,15 @@ document.addEventListener('keydown', (e) => {
       return;
     }
   }
+  if (!imeActive && state.view === 'writing' && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && !$('#modal-root').innerHTML) {
+    e.preventDefault();
+    if ($('#writing-find-bar')) $('#writing-find-bar').hidden = false;
+    $('#writing-find-query')?.focus();
+    return;
+  }
+  if (!imeActive && e.key === 'Enter' && e.target.id === 'writing-find-query') {
+    e.preventDefault(); findWritingText(); return;
+  }
   if (!imeActive && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault();
     if (state.commandPalette.open) closeCommandPalette();
@@ -15611,6 +15833,10 @@ document.addEventListener('keydown', (e) => {
     }
   }
   if (e.key === 'Escape' && !imeActive) {
+    if (state.view === 'writing' && !state.commandPalette.open && !$('#modal-root').innerHTML) {
+      closeWritingDrawers();
+      if ($('#writing-find-bar')) $('#writing-find-bar').hidden = true;
+    }
     if (!imeActive && window.innerWidth <= 720 && !state.commandPalette.open && !$('#modal-root').innerHTML && !state.sidebarCollapsed) {
       state.sidebarCollapsed = true;
       $('#sidebar')?.classList.add('collapsed');
