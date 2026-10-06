@@ -209,9 +209,6 @@ textarea { resize: vertical; }
 .canvas-commandbar details { position: relative; }
 .canvas-commandbar details > div { position: absolute; top: calc(100% + 5px); left: 0; min-width: 170px; display: flex; flex-direction: column; gap: 7px; padding: 12px; color: var(--wk-text); background: var(--wk-panel); border: 1px solid var(--wk-line); box-shadow: 0 8px 24px #0003; border-radius: 5px; }
 .canvas-commandbar details button { text-align: left; }
-.canvas-settings label { display: flex; justify-content: space-between; align-items: center; gap: 20px; font-size: 12px; }
-.canvas-settings input { width: 38px; text-align: center; padding: 5px; }
-.canvas-settings small { font-size: 11px; color: var(--wk-dim); }
 .canvas-primary { background: var(--wk-active) !important; color: #fff !important; border-color: var(--wk-active) !important; }
 .canvas-stage { display: flex; flex: 1; min-height: 0; position: relative; }
 .canvas-editor-area { flex: 1; min-width: 0; height: 100%; position: relative; }
@@ -1862,6 +1859,55 @@ mark.search-hit {
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 
+.canvas-editor-area .excalidraw .help-icon { display: none; }
+.canvas-editor-area .ToolIcon__keybinding { display: none; }
+.canvas-shortcuts-corner { position: absolute; right: 16px; bottom: 16px; z-index: 5; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text); padding: 8px 12px; cursor: pointer; box-shadow: var(--shadow-sm); }
+.shortcut-overlay { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 24px; background: #0006; backdrop-filter: blur(4px); }
+.shortcut-dialog { width: min(820px, 100%); max-height: min(820px, calc(100dvh - 48px)); display: flex; flex-direction: column; overflow: hidden; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 24px 80px #0004; }
+.shortcut-dialog button { cursor: pointer; font: inherit; color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-soft); min-height: 38px; padding: 6px 12px; }
+.shortcut-dialog button:hover { background: var(--bg-hover); border-color: var(--primary); }
+.shortcut-dialog button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.shortcut-dialog button:disabled { opacity: .45; cursor: default; }
+.shortcut-dialog header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 22px 24px 16px; }
+.shortcut-dialog h2 { font-size: 20px; margin: 0 0 6px; }
+.shortcut-dialog header p { margin: 0; font-size: 13px; color: var(--text-dim); }
+.shortcut-dialog header > button { width: 38px; padding: 0; flex: none; background: transparent; }
+.shortcut-instructions { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 0 24px 16px; font-size: 12px; color: var(--text-dim); }
+.shortcut-dialog kbd { font: 12px var(--mono, monospace); color: var(--text); white-space: nowrap; }
+.shortcut-instructions kbd { border: 1px solid var(--border); padding: 3px 5px; border-radius: 4px; background: var(--bg-soft); }
+.shortcut-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; padding: 0 24px 12px; }
+.shortcut-columns, .shortcut-row { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 16px; align-items: center; }
+.shortcut-columns { position: sticky; top: 0; z-index: 1; padding: 10px 0; color: var(--text-dim); font-size: 12px; background: var(--bg-card); border-bottom: 1px solid var(--border); }
+.shortcut-group { margin: 18px 0 6px; font-size: 12px; color: var(--primary); font-weight: 600; }
+.shortcut-row { min-height: 54px; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); font-size: 13px; }
+.shortcut-cell { display: flex; position: relative; min-width: 0; }
+.shortcut-dialog .shortcut-binding { width: 100%; padding-right: 26px; background: var(--bg-card); }
+.shortcut-binding kbd { display: block; overflow: hidden; text-overflow: ellipsis; }
+.shortcut-dialog .shortcut-clear { position: absolute; right: 4px; top: 4px; min-height: 30px; width: 25px; padding: 0; border: 0; background: transparent; color: var(--text-dim); }
+.shortcut-unbound { color: var(--text-dim); font-size: 12px; }
+.shortcut-cell.listening .shortcut-binding { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--bg-card)); color: var(--primary); font-size: 12px; }
+.shortcut-feedback { padding: 12px 24px; font-size: 12px; color: var(--text-dim); background: var(--bg-soft); border-top: 1px solid var(--border); }
+.shortcut-feedback [role="alert"] { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; color: var(--text); }
+.shortcut-feedback [role="alert"] > div { display: flex; gap: 8px; }
+.shortcut-dialog footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--border); }
+.shortcut-dialog footer > div { display: flex; gap: 8px; }
+.shortcut-dialog .shortcut-apply, .shortcut-dialog .shortcut-replace { background: var(--primary); border-color: var(--primary); color: white; }
+.shortcut-dialog .shortcut-reset { background: transparent; }
+@media (max-width: 600px) {
+  .shortcut-overlay { padding: 10px; }
+  .shortcut-dialog { max-height: calc(100dvh - 20px); }
+  .shortcut-dialog header { padding: 16px 14px 12px; }
+  .shortcut-instructions { padding: 0 14px 12px; gap: 10px; }
+  .shortcut-scroll { padding: 0 14px 10px; }
+  .shortcut-columns, .shortcut-row { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .shortcut-action-name { font-size: 12px; }
+  .shortcut-dialog .shortcut-binding { min-height: 44px; padding: 5px 20px 5px 4px; }
+  .shortcut-dialog kbd { font-size: 10px; }
+  .shortcut-dialog .shortcut-clear { right: 1px; top: 7px; width: 20px; }
+  .shortcut-feedback { padding: 10px 14px; }
+  .shortcut-dialog footer { padding: 12px 14px; }
+  .canvas-shortcuts-corner { right: 10px; bottom: 10px; }
+}
 :root { --accent: color-mix(in srgb, var(--primary) 85%, var(--text)); }
 :root[data-theme="dark"] { --accent: color-mix(in srgb, var(--primary) 60%, var(--text)); }
 .appearance-mode input:checked + span { color: var(--text); }

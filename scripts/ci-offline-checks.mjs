@@ -26,6 +26,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** @type {{name: string, cmd: string[], why: string}[]} */
 export const CHECKS = [
+  { name: '画布双槽快捷键（迁移/组合键/滚轮方向/冲突替换）', cmd: ['--test', 'scripts/test-canvas-shortcuts.mjs'], why: '绑定必须按真实事件解析，清空后不恢复默认，冲突只有明确替换才释放' },
   { name: '全局外观（风格/深浅模式/迁移/持久化）', cmd: ['--test', 'scripts/test-appearance.mjs'], why: '全局外观与正文背景分离，损坏偏好可恢复' },
   { name: '剧情画布保存与 AI（隔离 HTTP + 本地假模型）', cmd: ['--test', 'scripts/test-canvas-http.mjs'], why: '完整场景持久化、冲突拒绝、作品隔离、全图 AI 输入与候选不写入' },
   { name: '画布会话与剧情图（保存串行/失败保留/连线校验/快捷键）', cmd: ['--test', 'scripts/test-canvas-session.mjs'], why: '保存途中编辑不丢失，剧情图与工具快捷键可验证' },

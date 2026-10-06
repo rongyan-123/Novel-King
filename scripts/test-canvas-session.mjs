@@ -53,9 +53,10 @@ test('AI 剧情图拒绝悬空连线与重复编号，转换后的箭头绑定�
 test('工具快捷键可自定义，重复或无效配置不会覆盖已使用的按键', async () => {
   const { normalizeShortcuts } = await import('../canvas/shortcuts.mjs');
   const configured = normalizeShortcuts({ freedraw: 'q', text: 'Q', rectangle: 'ctrl+k', arrow: 'l' });
-  assert.equal(configured.freedraw, 'Q');
-  assert.equal(configured.text, 'T');
-  assert.equal(configured.rectangle, 'R');
-  assert.equal(configured.arrow, 'L');
-  assert.equal(new Set(Object.values(configured)).size, Object.keys(configured).length);
+  assert.deepEqual(configured.freedraw, ['Q', '7']);
+  assert.deepEqual(configured.text, ['', '8']);
+  assert.deepEqual(configured.rectangle, ['Ctrl+K', '2']);
+  assert.deepEqual(configured.arrow, ['L', '5']);
+  const bindings = Object.values(configured).flat().filter(Boolean);
+  assert.equal(new Set(bindings).size, bindings.length);
 });
