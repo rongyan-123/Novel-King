@@ -1,5 +1,7 @@
 > **Novel-King fork:** this repository adds an immersive writing workspace and a persistent Excalidraw story canvas. See [the canvas guide](docs/novel-king-canvas.md) for drawing, chapter links, AI proposals and build steps. The Node backend remains self-hosted; canvas assets and fonts are bundled locally.
 
+> **Novel-King server:** user accounts, a novel-scoped file library, a DSH research agent with read-only MCP tools and ranking snapshots, and PostgreSQL/pgvector Docker deployment are available. Start with [AI research and deployment](docs/ai-research-and-postgres.md) and [accounts](docs/accounts-and-deployment.md). Vector search is a future integration; the extension is initialized now. The upstream documentation below describes the original local SQLite application.
+
 <div align="center">
 
 # Novel Studio

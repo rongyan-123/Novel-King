@@ -43,7 +43,7 @@ const PORT = await new Promise((resolve) => {
     probe.listen(0, '127.0.0.1', () => { const p = probe.address().port; probe.close(() => resolve(p)); });
   }).catch(() => resolve(5600 + (process.pid % 300)));
 });
-const OV_PORT = PORT + 1000;
+let OV_PORT;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = mkdtempSync(join(tmpdir(), 'novel-ov-boundary-'));
 const AGENT = { 'x-novel-agent': '1' };
@@ -230,7 +230,8 @@ const stub = createServer((req, res) => {
   }
   return send({ status: 'ok', result: {} });
 });
-await new Promise((r) => stub.listen(OV_PORT, '127.0.0.1', r));
+await new Promise((r) => stub.listen(0, '127.0.0.1', r));
+OV_PORT = stub.address().port;
 
 console.log(`\n召回边界隔离测试（服务端口 ${PORT}，OV stub ${OV_PORT}，数据目录 ${DATA_DIR}）`);
 const server = spawn(process.execPath, ['server.js'], {

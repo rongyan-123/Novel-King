@@ -1,0 +1,197 @@
+{
+  "source": "https://github.com/deepseek-ai/deepseek-harness",
+  "version": "0.1.0-rc.5",
+  "license": "MIT",
+  "sha256": "d953f8b4d72bb90f480b4ee493c552eae46bef924aaf7b2b84f1dd3459474012",
+  "capability": "core agent loop; no shell, arbitrary filesystem, code execution or self-modification plugins",
+  "patches": [
+    "Model HTTP requests use redirect:error; upstream source is unchanged"
+  ],
+  "dependencies": [
+    {
+      "name": "@deepseek-ai/cosmokit",
+      "version": "1.8.2",
+      "license": "MIT",
+      "license_file": "licenses/_deepseek-ai_cosmokit.txt"
+    },
+    {
+      "name": "@deepseek-ai/cordis",
+      "version": "4.0.1",
+      "license": "MIT",
+      "license_file": "licenses/_deepseek-ai_cordis.txt"
+    },
+    {
+      "name": "@deepseek-ai/dsh-llm",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/schemastery",
+      "version": "3.18.1",
+      "license": "MIT",
+      "license_file": "licenses/_deepseek-ai_schemastery.txt"
+    },
+    {
+      "name": "@deepseek-ai/dsh-timeout",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/dsh-credentials",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/dsh-launch-environment",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/dsh-settings",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/dsh-home-paths",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/dsh-anonymous-user-id",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/dsh-llm-deepseek",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "eventsource-parser",
+      "version": "3.1.0",
+      "license": "MIT",
+      "license_file": "licenses/eventsource-parser.txt"
+    },
+    {
+      "name": "@deepseek-ai/dsh-scope",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/dsh-session",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/dsh-system-prompt",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/dsh-tools",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/dsh-agent",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "@deepseek-ai/dsh-agent-loop",
+      "version": "0.1.0-rc.5",
+      "license": "MIT",
+      "license_file": "LICENSE"
+    }
+  ],
+  "inputs": [
+    "../deepseek-harness/vendor/cosmokit/src/misc.ts",
+    "../deepseek-harness/vendor/cosmokit/src/array.ts",
+    "../deepseek-harness/vendor/cosmokit/src/types.ts",
+    "../deepseek-harness/vendor/cosmokit/src/string.ts",
+    "../deepseek-harness/vendor/cosmokit/src/time.ts",
+    "../deepseek-harness/vendor/cosmokit/src/index.ts",
+    "../deepseek-harness/vendor/cordis/src/utils.ts",
+    "../deepseek-harness/vendor/cordis/src/events.ts",
+    "../deepseek-harness/vendor/cordis/src/logger.ts",
+    "../deepseek-harness/vendor/cordis/src/fiber.ts",
+    "../deepseek-harness/vendor/cordis/src/reflect.ts",
+    "../deepseek-harness/vendor/cordis/src/registry.ts",
+    "../deepseek-harness/vendor/cordis/src/context.ts",
+    "../deepseek-harness/vendor/cordis/src/service.ts",
+    "../deepseek-harness/vendor/cordis/src/index.ts",
+    "../deepseek-harness/packages/llm/llm/src/brand.ts",
+    "../deepseek-harness/packages/llm/llm/src/call-config.ts",
+    "../deepseek-harness/packages/llm/llm/src/message.ts",
+    "../deepseek-harness/vendor/schemastery/src/index.ts",
+    "../deepseek-harness/packages/util/timeout/src/index.ts",
+    "../deepseek-harness/packages/llm/llm/src/error.ts",
+    "../deepseek-harness/packages/llm/llm/src/retry-policy.ts",
+    "../deepseek-harness/packages/llm/llm/src/adapter-failure.ts",
+    "../deepseek-harness/packages/llm/llm/src/api-key.ts",
+    "../deepseek-harness/packages/llm/llm/src/attribution.ts",
+    "../deepseek-harness/packages/llm/llm/src/never.ts",
+    "../deepseek-harness/packages/llm/llm/src/types.ts",
+    "../deepseek-harness/packages/llm/llm/src/content.ts",
+    "../deepseek-harness/packages/llm/llm/src/assembler.ts",
+    "../deepseek-harness/packages/llm/llm/src/index.ts",
+    "../deepseek-harness/packages/credentials/credentials/src/index.ts",
+    "../deepseek-harness/packages/util/launch-environment/src/index.ts",
+    "../deepseek-harness/packages/settings/settings/src/redact.ts",
+    "../deepseek-harness/packages/settings/settings/src/index.ts",
+    "../deepseek-harness/packages/util/home-paths/src/index.ts",
+    "../deepseek-harness/packages/identity/anonymous-user-id/src/index.ts",
+    "../deepseek-harness/packages/llm/llm-deepseek/src/serialize.ts",
+    "../deepseek-harness/node_modules/.pnpm/eventsource-parser@3.1.0/node_modules/eventsource-parser/dist/index.js",
+    "../deepseek-harness/node_modules/.pnpm/eventsource-parser@3.1.0/node_modules/eventsource-parser/dist/stream.js",
+    "../deepseek-harness/packages/llm/llm-deepseek/src/sse.ts",
+    "../deepseek-harness/packages/llm/llm-deepseek/src/translate.ts",
+    "../deepseek-harness/packages/llm/llm-deepseek/src/adapter.ts",
+    "../deepseek-harness/packages/llm/llm-deepseek/src/index.ts",
+    "../deepseek-harness/packages/core/scope/src/store.ts",
+    "../deepseek-harness/packages/core/scope/src/index.ts",
+    "../deepseek-harness/packages/core/session/src/types.ts",
+    "../deepseek-harness/packages/core/session/src/json.ts",
+    "../deepseek-harness/packages/core/session/src/surface.ts",
+    "../deepseek-harness/packages/core/session/src/request-header.ts",
+    "../deepseek-harness/packages/core/session/src/preparation.ts",
+    "../deepseek-harness/packages/core/session/src/repair.ts",
+    "../deepseek-harness/packages/core/session/src/chunk-rows.ts",
+    "../deepseek-harness/packages/core/session/src/known-event-types.ts",
+    "../deepseek-harness/packages/core/session/src/index.ts",
+    "../deepseek-harness/packages/core/system-prompt/src/index.ts",
+    "../deepseek-harness/packages/core/tools/src/json-schema.ts",
+    "../deepseek-harness/packages/core/tools/src/schema.ts",
+    "../deepseek-harness/packages/core/tools/src/code-mode.ts",
+    "../deepseek-harness/packages/core/tools/src/ts-types.ts",
+    "../deepseek-harness/packages/core/tools/src/py-types.ts",
+    "../deepseek-harness/packages/core/tools/src/testing.ts",
+    "../deepseek-harness/packages/core/tools/src/index.ts",
+    "../deepseek-harness/packages/core/agent/src/runtime-types.ts",
+    "../deepseek-harness/packages/core/agent/src/types.ts",
+    "../deepseek-harness/packages/core/agent/src/inbox.ts",
+    "../deepseek-harness/packages/core/agent/src/consumed-work.ts",
+    "../deepseek-harness/packages/core/agent/src/model-selection.ts",
+    "../deepseek-harness/packages/core/agent/src/dispatch.ts",
+    "../deepseek-harness/packages/core/agent/src/index.ts",
+    "../deepseek-harness/packages/core/agent-loop/src/runtime-context.ts",
+    "../deepseek-harness/packages/core/agent-loop/src/tool-calls.ts",
+    "../deepseek-harness/packages/core/agent-loop/src/agent.ts",
+    "../deepseek-harness/packages/core/agent-loop/src/constants.ts",
+    "../deepseek-harness/packages/core/agent-loop/src/index.ts",
+    "ai/research/dsh-entry.mjs"
+  ]
+}

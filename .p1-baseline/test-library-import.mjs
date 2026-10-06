@@ -37,7 +37,7 @@ const PORT = await new Promise((resolvePort) => {
     probe.listen(0, '127.0.0.1', () => { const p = probe.address().port; probe.close(() => resolvePort(p)); });
   }).catch(() => resolvePort(6600 + (process.pid % 300)));
 });
-const OV_PORT = PORT + 1000;
+let OV_PORT;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = mkdtempSync(join(tmpdir(), 'novel-library-import-'));
 const SRC_DIR = mkdtempSync(join(tmpdir(), 'novel-library-src-'));
@@ -145,7 +145,8 @@ const stub = createServer((req, res) => {
   }
   return send({ status: 'ok', result: {} });
 });
-await new Promise((r) => stub.listen(OV_PORT, '127.0.0.1', r));
+await new Promise((r) => stub.listen(0, '127.0.0.1', r));
+OV_PORT = stub.address().port;
 
 const server = spawn(process.execPath, ['server.js'], {
   cwd: REPO,

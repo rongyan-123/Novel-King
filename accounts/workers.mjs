@@ -7,8 +7,10 @@ import { failure } from './store.mjs';
 
 const safeEnvKeys = ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'LANG', 'LC_ALL'];
 export class UserWorkers {
-  constructor(root, repo, { maximum = 4, aiOrigins = '' } = {}) {
+  constructor(root, repo, { maximum = 4, aiOrigins = '', databaseURL = '', mcpOrigins = '', rankReaderURL = '', rankReaderToken = '' } = {}) {
     this.root = root; this.repo = repo; this.maximum = maximum; this.aiOrigins = aiOrigins; this.workers = new Map();
+    this.databaseURL = databaseURL;
+    this.researchEnv = { NOVELKING_MCP_ORIGINS: mcpOrigins || 'https://mcp.exa.ai,https://mcp.tavily.com', NOVELKING_RANK_READER_URL: rankReaderURL, NOVELKING_RANK_READER_TOKEN: rankReaderToken };
     this.sweep = setInterval(() => {
       for (const [id, worker] of this.workers) if (!worker.active && !worker.starting && Date.now() - worker.lastUsed > 600000) this.stop(id);
     }, 60000).unref();
@@ -31,7 +33,8 @@ export class UserWorkers {
       const env = Object.fromEntries(safeEnvKeys.filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]));
       Object.assign(env, { PORT: '0', NOVELKING_WORKER_PORT: '0', NOVELKING_WORKER_TOKEN: token, NOVELKING_HOSTED: '1',
         NOVELSTUDIO_DATA_DIR: dataRoot, NOVELSTUDIO_OV_DISABLED: '1', NOVELSTUDIO_DSH_HOME: path.join(home, '.dsh'),
-        HOME: home, USERPROFILE: home, NOVELKING_AI_ORIGINS: this.aiOrigins });
+        HOME: home, USERPROFILE: home, NOVELKING_AI_ORIGINS: this.aiOrigins }, this.researchEnv);
+      if (this.databaseURL) Object.assign(env, { NOVELKING_DATABASE_URL: this.databaseURL, NOVELKING_DATABASE_SCHEMA: 'nk_u_' + userId.replaceAll('-', '') });
       const child = worker.child = spawn(process.execPath, ['server.js'], { cwd: this.repo, env, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
       const log = fs.createWriteStream(path.join(dataRoot, 'worker.log'), { flags: 'w', mode: 0o600 });
       child.stdout.pipe(log, { end: false }); child.stderr.pipe(log, { end: false });

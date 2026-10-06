@@ -10,7 +10,7 @@ import { migrateAdminData } from './accounts/migration.mjs';
 const repo = path.dirname(fileURLToPath(import.meta.url));
 const cookieName = 'novelking_session';
 const authAssets = new Set(['/login', '/login.html', '/account-login.js', '/account-client.js', '/account-storage.js', '/account.css', '/appearance.js', '/styles.css']);
-const basicResources = new Set(['works', 'volumes', 'plotlines', 'chapters', 'categories', 'terms', 'characters', 'relations', 'plotline_characters', 'world_entries', 'creation_tasks', 'api_configs', 'canvas', 'files', 'stats', 'search', 'export', 'chapter_versions', 'logs', 'ai_errors', 'debug', 'import', 'ai']);
+const basicResources = new Set(['works', 'volumes', 'plotlines', 'chapters', 'categories', 'terms', 'characters', 'relations', 'plotline_characters', 'world_entries', 'creation_tasks', 'api_configs', 'canvas', 'files', 'stats', 'search', 'export', 'chapter_versions', 'logs', 'ai_errors', 'debug', 'import', 'ai', 'research']);
 const novelResources = new Set(['ping', 'story_state', 'state', 'approvals', 'adopt', 'projections', 'editing', 'novel_index', 'author_intent', 'scan', 'continuity_guard', 'continuity_exemption', 'foreshadows', 'proposals', 'chapter_blueprint', 'review', 'finalize', 'draft', 'empty_chapters', 'chapter_save', 'memory_auto_compress', 'context']);
 export function hostedRouteAllowed(url, method) {
   const [, api, resource, action] = url.pathname.split('/');
@@ -36,11 +36,12 @@ export async function createAccountServer(env = process.env) {
   const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(publicUrl.hostname);
   if (publicUrl.pathname !== '/' || publicUrl.username || publicUrl.password || publicUrl.search || publicUrl.hash || (publicUrl.protocol !== 'https:' && !(loopback && publicUrl.protocol === 'http:'))) throw Error('NOVELKING_PUBLIC_ORIGIN 须为 HTTPS 域名，或本机 HTTP 调试地址');
   const root = path.resolve(env.NOVELKING_ACCOUNT_ROOT || path.join(repo, 'accounts-data'));
-  const store = new AccountStore(root, { captchaTtl: Math.max(100, Math.min(300000, Number(env.NOVELKING_CAPTCHA_TTL_MS) || 120000)) });
+  const store = new AccountStore(root, { captchaTtl: Math.max(100, Math.min(300000, Number(env.NOVELKING_CAPTCHA_TTL_MS) || 120000)), databaseURL: env.NOVELKING_DATABASE_URL, databaseSchema: env.NOVELKING_ACCOUNT_SCHEMA || 'nk_accounts' });
   await store.bootstrap(env.NOVELKING_ADMIN_USER, env.NOVELKING_ADMIN_PASSWORD);
   const migration = await migrateAdminData(store, env.NOVELKING_LEGACY_DATA_DIR);
   if (migration.migrated) console.log('旧作品、资料和画布已复制到管理员的个人数据库，原目录未改动');
-  const workers = new UserWorkers(root, repo, { maximum: Math.max(1, Math.min(32, Number(env.NOVELKING_MAX_WORKERS) || 4)), aiOrigins: env.NOVELKING_AI_ORIGINS || 'https://api.deepseek.com,https://api.openai.com' });
+  const workers = new UserWorkers(root, repo, { maximum: Math.max(1, Math.min(32, Number(env.NOVELKING_MAX_WORKERS) || 4)), aiOrigins: env.NOVELKING_AI_ORIGINS || 'https://api.deepseek.com,https://api.openai.com', databaseURL: env.NOVELKING_DATABASE_URL,
+    mcpOrigins: env.NOVELKING_MCP_ORIGINS, rankReaderURL: env.NOVELKING_RANK_READER_URL, rankReaderToken: env.NOVELKING_RANK_READER_TOKEN });
   const setSession = (res, token) => res.setHeader('Set-Cookie', `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${token ? 14 * 86400 : 0}${publicUrl.protocol === 'https:' ? '; Secure' : ''}`);
   const proxyAddresses = new Set(String(env.NOVELKING_TRUSTED_PROXIES || '').split(',').filter(Boolean));
   function clientIp(req) {

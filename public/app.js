@@ -7207,6 +7207,7 @@ function renderStaleBanner() {
 }
 
 async function renderAI(content) {
+  if (window.NovelKingResearch) return window.NovelKingResearch.mount(content, { works: state.works, configs: state.apiConfigs, activeConfigId: state.activeConfigId, workId: state.workId });
   const configs = state.apiConfigs;
   content.innerHTML = `
     <div class="page-head">
@@ -8808,8 +8809,8 @@ function openApiConfigModal(config = null) {
       <div class="form-grid">
         <div class="field full"><label>配置名称</label><input name="name" value="${esc(config?.name || '')}" placeholder="例如：DeepSeek 主账号"></div>
         <div class="field full"><label>Base URL</label><input name="base_url" value="${esc(config?.base_url || 'https://api.deepseek.com')}" placeholder="https://api.deepseek.com"></div>
-        <div class="field"><label>API Key</label><input name="api_key" value="" placeholder="${config ? '留空则保持当前密钥不变' : 'sk-...'}"></div>
-        <div class="field"><label>模型</label>${modelSelectHtml(config?.model || DEFAULT_AI_MODEL)}</div>
+        <div class="field"><label>API Key</label><input name="api_key" type="password" autocomplete="off" value="" placeholder="${config ? '留空则保持当前密钥不变' : 'sk-...'}"></div>
+        <div class="field"><label>模型名称</label><input name="model" value="${esc(config?.model || DEFAULT_AI_MODEL)}" list="api-model-suggestions" placeholder="填写服务商提供的模型名称"><datalist id="api-model-suggestions">${KNOWN_AI_MODELS.map(([value]) => `<option value="${value}">`).join('')}</datalist></div>
         <div class="field"><label>温度</label><input name="temperature" type="number" step="0.1" min="0" max="2" value="${config?.temperature ?? 0.8}"></div>
         <div class="field"><label>最大 Token（单次输出字数上限，1 token ≈ 0.6 个汉字）</label><input name="max_tokens" type="number" min="1" value="${config?.max_tokens ?? 4096}"></div>
       </div>`,

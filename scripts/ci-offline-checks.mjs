@@ -26,6 +26,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** @type {{name: string, cmd: string[], why: string}[]} */
 export const CHECKS = [
+  { name: 'DSH 研究与 MCP（真实循环/取消/脱敏/跨作品只读/榜单来源/流式界面/浏览器采集服务）', cmd: ['--test', 'scripts/test-research-dsh.mjs', 'scripts/test-research-http.mjs', 'scripts/test-research-tools.mjs', 'scripts/test-research-rankings.mjs', 'scripts/test-research-client.mjs', 'scripts/test-ranking-reader.mjs', 'scripts/test-research-worker-env.mjs', 'scripts/test-dsh-vendor.mjs'], why: '研究须真正调用工具并持久化，同时守住作品与凭据边界' },
   { name: '账户与注册（隔离 HTTP：算术题/限流/登录/数据库与文件隔离/会话撤销/主机工具封锁）', cmd: ['--test', 'scripts/test-accounts-http.mjs'], why: '服务器入口默认拒绝匿名与跨账号访问' },
   { name: '账户本地草稿与旧数据迁移', cmd: ['--test', 'scripts/test-account-storage.mjs', 'scripts/test-account-migration.mjs', 'scripts/test-account-session-race.mjs', 'scripts/test-hosted-harness.mjs'], why: '浏览器草稿按账号隔离，旧作者数据复制给管理员且不覆盖，会话撤销不能被并发绕过，DSH 主机执行关闭' },
   { name: '文件库（隔离 HTTP：原件/重启/全文/目录/回收站/归属/模型只读/Word/PDF/取消）', cmd: ['--test', 'scripts/test-file-library-http.mjs'], why: '资料持久化与用户整理不依赖模型或记忆库，不覆盖作品正文' },

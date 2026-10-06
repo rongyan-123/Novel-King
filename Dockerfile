@@ -5,6 +5,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY *.js *.mjs demo-data.json ./
 COPY ai ./ai
 COPY accounts ./accounts
+COPY canvas ./canvas
+COPY storage ./storage
+COPY vendor ./vendor
 COPY public ./public
 COPY harness-plugins ./harness-plugins
 COPY docs ./docs

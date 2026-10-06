@@ -72,7 +72,7 @@
       try { localStorage.setItem('novelking.activeAccount', user.id); } catch {}
       window.addEventListener('storage', event => { if (event.key === 'novelking.activeAccount' && event.newValue !== user.id) lock('其他标签页已经退出或切换账号，这个工作台已锁定。'); });
     } else if (statusResponse.status !== 404) throw Error('账户服务暂时不可用，请刷新');
-    await loadScript('/long-text.js'); await loadScript('/writing-workspace.js'); await loadScript('/file-library.js'); await loadScript('/app.js');
+    await loadScript('/long-text.js'); await loadScript('/writing-workspace.js'); await loadScript('/file-library.js'); await loadScript('/research.js'); await loadScript('/app.js');
     if (window.NovelKingAccount) {
       document.addEventListener('click', event => { if (event.target.closest('[data-account-menu]')) showAccount(window.NovelKingAccount.user); });
     }

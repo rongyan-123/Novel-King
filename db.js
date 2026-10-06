@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { createDatabase } from './storage/database.mjs';
 import { mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,16 +13,18 @@ const dataDir = process.env.NOVELSTUDIO_DATA_DIR
   : join(__dirname, 'data');
 mkdirSync(dataDir, { recursive: true });
 
-export const db = new DatabaseSync(join(dataDir, 'novel.db'));
+export const db = createDatabase(join(dataDir, 'novel.db'));
 
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA foreign_keys = ON;');
 db.exec('PRAGMA busy_timeout = 5000;');
 // 启动自检：损坏库不得带病进入可写服务；调用方应先从备份恢复。
 try {
-  const check = db.prepare('PRAGMA quick_check').get();
-  const verdict = String(check?.quick_check || check?.integrity_check || '').toLowerCase();
-  if (verdict !== 'ok') throw new Error(`SQLite quick_check 未通过：${verdict || 'unknown'}`);
+  if (db.kind !== 'postgres') {
+    const check = db.prepare('PRAGMA quick_check').get();
+    const verdict = String(check?.quick_check || check?.integrity_check || '').toLowerCase();
+    if (verdict !== 'ok') throw new Error(`SQLite quick_check 未通过：${verdict || 'unknown'}`);
+  }
 } catch (e) {
   throw new Error(`数据库完整性自检失败，已拒绝启动写入：${e.message}`);
 }

@@ -5251,6 +5251,7 @@ function maybeAutoCompressMemory(workId) {
 }
 
 // ---------- 路由入口 ----------// 统一处理 /api 下的请求：搜索、统计、AI、历史版本、关闭服务、通用 CRUD。
+let researchHandler;
 async function handleAPI(req, res, pathname, query) {
   const method = req.method;
   const segments = pathname.split('/').filter(Boolean);
@@ -5279,6 +5280,20 @@ async function handleAPI(req, res, pathname, query) {
 
   // ---------- 🐞 运行追踪（调试录制） ----------
   if (resource === 'files') return handleFiles({ req, res, segments, query, db, dataDir: DATA_DIR, agent: isAgentRequest(req), sendJSON, readBody });
+  if (resource === 'research') {
+    if (isAgentRequest(req)) return sendError(res, 403, '研究配置与作业管理仅限作者');
+    try {
+      if (!researchHandler) {
+        researchHandler = import('./ai/research/http.mjs').then(({ createResearchHandler }) => createResearchHandler({ database: db, readBody, sendJSON, isAgentRequest, requireAIEndpoint: requireHostedAIEndpoint }));
+      }
+      const url = new URL(pathname, 'http://localhost');
+      for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+      return await (await researchHandler)(req, res, url);
+    } catch (error) {
+      if (res.headersSent) return res.end();
+      return sendError(res, error.status || 500, error.status ? error.message : 'AI 研究服务暂时无法完成请求');
+    }
+  }
 
   // 本组接口自身不参与追踪（debug-trace 的 isExcludedPath 排除 /api/debug），
   // 否则「查看追踪」这个动作会不断产生新的追踪数据。

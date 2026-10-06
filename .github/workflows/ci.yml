@@ -49,7 +49,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      # 本项目是零依赖的（package.json 没有 dependencies），所以没有 install 步骤。
+      - name: 安装锁定依赖
+        run: npm ci
       - name: 平台事实（第一屏就能看出平台差异）
         run: node -e "const os=require('node:os'),p=require('node:path');console.log('platform='+process.platform+' release='+os.release()+' arch='+process.arch);console.log('node='+process.version);console.log('tmpdir='+os.tmpdir());console.log('path.sep='+JSON.stringify(p.sep));console.log('cwd='+process.cwd())"
       # 条数不写死：清单的唯一来源是 scripts/ci-offline-checks.mjs，YAML 里再抄一遍数字
@@ -71,6 +72,8 @@ jobs:
           # 缺能力时那个工具现在会响亮失败（见 .p1-baseline/audit-llm-calls.mjs 的
           # assertZstdAvailable），所以下限这一格定在 22.15：它同时覆盖 sqlite 与 zstd 两件事。
           node-version: '22.15.0'
+      - name: 安装锁定依赖
+        run: npm ci
       - name: 平台事实（第一屏就能看出平台差异）
         run: node -e "const os=require('node:os'),p=require('node:path');console.log('platform='+process.platform+' release='+os.release()+' arch='+process.arch);console.log('node='+process.version);console.log('tmpdir='+os.tmpdir());console.log('path.sep='+JSON.stringify(p.sep));console.log('cwd='+process.cwd())"
       - name: 离线套件（证明不是"只在 24 上能跑"）
@@ -88,6 +91,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: 安装锁定依赖
+        run: npm ci
       - name: 平台事实（第一屏就能看出平台差异）
         run: node -e "const os=require('node:os'),p=require('node:path');console.log('platform='+process.platform+' release='+os.release()+' arch='+process.arch);console.log('node='+process.version);console.log('tmpdir='+os.tmpdir());console.log('path.sep='+JSON.stringify(p.sep));console.log('cwd='+process.cwd())"
       # 端口必须与 api-test-suite.mjs 里写死的 3738 一致（它按约定打这个端口）。
@@ -95,3 +100,31 @@ jobs:
         run: node scripts/ci-isolated-run.mjs --port 3738 -- node api-test-suite.mjs
       - name: 插件冒烟（同一个隔离配方）
         run: node scripts/ci-isolated-run.mjs --port 3738 -- node harness-plugins/novel-writing/test/smoke.mjs
+
+  postgres:
+    name: PostgreSQL 实库与迁移验收
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: novelking_test
+          POSTGRES_USER: novelking
+          POSTGRES_PASSWORD: isolated_ci_fixture_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U novelking -d novelking_test"
+          --health-interval 5s --health-timeout 3s --health-retries 15
+    env:
+      NOVELKING_TEST_DATABASE_URL: postgres://novelking:isolated_ci_fixture_password@127.0.0.1:5432/novelking_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: 初始化向量扩展
+        run: node --input-type=module -e "import pg from 'pg';const client=new pg.Client({connectionString:process.env.NOVELKING_TEST_DATABASE_URL});await client.connect();await client.query('CREATE EXTENSION IF NOT EXISTS vector');await client.end();"
+      - name: 实际 CRUD、事务、索引、全库迁移与用户隔离
+        run: node --test scripts/test-postgres-database.mjs scripts/test-postgres-host.mjs

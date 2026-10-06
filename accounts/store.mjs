@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { createDatabase } from '../storage/database.mjs';
 import { randomBytes, randomInt, randomUUID, createHash, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import fs from 'node:fs';
@@ -32,11 +32,11 @@ async function verifyPassword(password, stored) {
 }
 
 export class AccountStore {
-  constructor(root, { captchaTtl = 120000 } = {}) {
+  constructor(root, { captchaTtl = 120000, databaseURL, databaseSchema = 'nk_accounts' } = {}) {
     this.root = root;
     this.captchaTtl = captchaTtl;
     fs.mkdirSync(root, { recursive: true, mode: 0o700 });
-    this.db = new DatabaseSync(path.join(root, 'accounts.db'));
+    this.db = createDatabase(path.join(root, 'accounts.db'), { url: databaseURL, schema: databaseSchema });
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL, username_key TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user', disabled INTEGER NOT NULL DEFAULT 0,

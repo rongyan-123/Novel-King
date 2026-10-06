@@ -2,6 +2,8 @@
 
 本仓库基于 Novel Studio 开发，新增沉浸式写作界面与持久化剧情画布。画布操作、章节关联、AI 剧情图与构建方式见 [使用说明](docs/novel-king-canvas.md)。其余基础能力与上游历史说明保留在下方。
 
+现已提供多用户账户、按小说区分的文件库、基于 DSH 的 AI 研究与只读 MCP、起点公开榜单快照，以及 PostgreSQL/pgvector Docker 部署。先看 [AI 研究与部署](docs/ai-research-and-postgres.md) 和 [账户说明](docs/accounts-and-deployment.md)。目前初始化向量扩展，语义检索尚未实现；下方上游说明主要描述旧版单作者 SQLite 应用。
+
 [**English**](README.md) · **简体中文**
 
 [![CI](https://github.com/bbaz123/novel-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/bbaz123/novel-studio/actions/workflows/ci.yml)

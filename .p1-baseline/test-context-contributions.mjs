@@ -37,7 +37,7 @@ const PORT = await new Promise((resolve) => {
     probe.listen(0, '127.0.0.1', () => { const p = probe.address().port; probe.close(() => resolve(p)); });
   }).catch(() => resolve(6100 + (process.pid % 300)));
 });
-const OV_PORT = PORT + 1000;
+let OV_PORT;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = mkdtempSync(join(tmpdir(), 'novel-contrib-'));
 const FAKE_DSH = mkdtempSync(join(tmpdir(), 'novel-fake-dsh-'));
@@ -114,7 +114,8 @@ const stub = createServer((req, res) => {
   if (req.method === 'DELETE') return send({ status: 'ok', result: { ok: true } });
   return send({ status: 'ok', result: {} });
 });
-await new Promise((r) => stub.listen(OV_PORT, '127.0.0.1', r));
+await new Promise((r) => stub.listen(0, '127.0.0.1', r));
+OV_PORT = stub.address().port;
 
 // 假 dsh 目录：有 package.json（isHarnessAvailable=true）但没有构建产物 → 任务会失败，但**不会**发模型请求。
 mkdirSync(FAKE_DSH, { recursive: true });
