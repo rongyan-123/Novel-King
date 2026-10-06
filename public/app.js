@@ -938,23 +938,40 @@ function setTopbarTitle(text) {
 }
 
 // 主题只改变呈现，不触发作品数据刷新或编辑器重建；偏好是轻量 UI 状态。
-function applyTheme(theme, { persist = true } = {}) {
-  const next = theme === 'dark' ? 'dark' : 'light';
-  document.documentElement.dataset.theme = next;
+function applyGlobalAppearance(preferences, { persist = true } = {}) {
+  const normalized = NovelKingAppearance.normalize(preferences);
   if (persist) {
-    try { localStorage.setItem('ns_theme', next); } catch (_) { /* 存储不可用时仅本次会话生效 */ }
+    try { NovelKingAppearance.save(localStorage, normalized); }
+    catch { toast('外观已应用，但浏览器未能保存偏好', 'error'); }
   }
-  const button = $('#theme-toggle');
-  if (button) {
-    button.textContent = next === 'dark' ? '☼ 浅色' : '☾ 深色';
-    button.title = next === 'dark' ? '切换到浅色主题' : '切换到深色主题';
-    button.setAttribute('aria-label', button.title);
-  }
+  NovelKingAppearance.apply(document, normalized, window.matchMedia?.('(prefers-color-scheme: dark)').matches || false);
+  writingCanvas?.setTheme(document.documentElement.dataset.theme);
+}
+
+function applyTheme(theme, { persist = true } = {}) {
+  applyGlobalAppearance({ ...NovelKingAppearance.read(localStorage), mode: theme === 'dark' ? 'dark' : 'light' }, { persist });
 }
 
 function toggleTheme() {
-  const current = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
-  applyTheme(current === 'dark' ? 'light' : 'dark');
+  applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+}
+
+function openGlobalAppearance() {
+  const preferences = NovelKingAppearance.read(localStorage);
+  const modes = [['system', '跟随系统'], ['light', '浅色'], ['dark', '深色']];
+  openModal({ title: '全局外观', body: `<div class="global-appearance">
+    <p class="settings-intro">书架、写作台与画布，使用同一套外观。</p>
+    <fieldset class="settings-section"><legend>显示模式</legend><div class="appearance-mode">${modes.map(([id, name]) => `<label><input type="radio" name="mode" value="${id}" ${preferences.mode === id ? 'checked' : ''}><span>${name}</span></label>`).join('')}</div></fieldset>
+    <fieldset class="settings-section"><legend>界面风格</legend><div class="appearance-style-grid">${NovelKingAppearance.styles.map((style) => `<label class="appearance-style ${style.id}"><input type="radio" name="style" value="${style.id}" ${preferences.style === style.id ? 'checked' : ''}><div class="style-miniature" aria-hidden="true"><i></i><div><b></b><span></span><span></span></div></div><strong>${style.name}</strong><small>${style.description}</small></label>`).join('')}</div></fieldset>
+    <fieldset class="settings-section"><legend>强调色</legend><div class="appearance-accent-row"><label class="appearance-default-accent"><input type="checkbox" name="defaultAccent" ${!preferences.accent ? 'checked' : ''}> 使用风格默认色</label><label class="appearance-custom-accent">自定义<input name="accent" type="color" aria-label="自定义强调色" value="${preferences.accent || NovelKingAppearance.styles.find((style) => style.id === preferences.style).accent}"></label></div></fieldset>
+  </div>`, footer: '<button class="btn secondary" data-close-modal>取消</button><button class="btn secondary" data-action="reset-global-appearance">恢复默认</button><button class="btn" data-action="save-global-appearance">应用外观</button>' });
+  $('.modal').classList.add('appearance-dialog');
+  $('.global-appearance input[name="accent"]').addEventListener('input', () => { $('.global-appearance input[name="defaultAccent"]').checked = false; });
+}
+
+function saveGlobalAppearance() {
+  applyGlobalAppearance({ mode: $('.global-appearance input[name="mode"]:checked')?.value, style: $('.global-appearance input[name="style"]:checked')?.value, accent: $('.global-appearance input[name="defaultAccent"]').checked ? '' : $('.global-appearance input[name="accent"]').value });
+  closeModal();
 }
 
 function updateSidebarTitle() {
@@ -3070,7 +3087,7 @@ async function showWritingCanvas() {
       const module = await import('/canvas-assets/canvas.js');
       if (state.workId !== workId || !document.contains(host)) return;
       host.innerHTML = '';
-      const mounted = await module.mountCanvas(host, { workId, title: state.work.title, theme: state.writingPreferences.theme, chapters: state.chapters,
+      const mounted = await module.mountCanvas(host, { workId, title: state.work.title, theme: document.documentElement.dataset.theme, chapters: state.chapters,
         configs: state.apiConfigs, configId: state.activeConfigId, request: api, notify: toast, aiTimeout: longAiTimeout(),
         openChapter: (id) => handleAction('open-chapter', { dataset: { id: String(id) } }),
         openAISettings: () => handleAction('go-view', { dataset: { view: 'ai' } }),
@@ -3141,13 +3158,12 @@ function applyWritingPreferences() {
   const workspace = $('#content.king-workspace');
   if (!workspace) return;
   const preferences = state.writingPreferences ||= NovelKingWriting.readPreferences(localStorage);
-  workspace.dataset.writingTheme = preferences.theme;
   workspace.dataset.writingGrid = preferences.grid;
   workspace.classList.toggle('catalog-collapsed', preferences.catalogCollapsed);
   for (const [property, value] of Object.entries({
     '--writing-font': preferences.font, '--writing-font-size': `${preferences.fontSize}px`,
     '--writing-line-height': preferences.lineHeight, '--writing-width': `${preferences.width}px`,
-    '--writing-margin': `${preferences.margin}px`, '--writing-background': preferences.background || '',
+    '--writing-margin': `${preferences.margin}px`,
     '--writing-image': preferences.image ? `url("${preferences.image}")` : 'none',
     '--writing-image-opacity': preferences.imageOpacity, '--catalog-width': `${preferences.catalogWidth}px`,
     '--writing-indent': preferences.indent ? '2em' : '0', '--writing-paragraph-gap': preferences.paragraphGap ? '1em' : '0',
@@ -3163,35 +3179,75 @@ function openWritingAppearance(section = 'font') {
     ${numeric('fontSize', '字号', 14, 36)}${numeric('lineHeight', '行距', 1.2, 3, 0.1)}
     ${numeric('width', '正文宽度', 480, 1400, 20)}${numeric('margin', '左右边距', 12, 200, 4)}
     <div class="field full row"><label><input name="indent" type="checkbox" ${preferences.indent ? 'checked' : ''}> 首行缩进</label><label><input name="paragraphGap" type="checkbox" ${preferences.paragraphGap ? 'checked' : ''}> 段间空行</label></div></div>`;
-  const backgroundBody = `<div class="form-grid">
-    <div class="field full"><label>背景配色</label><div class="appearance-themes">${[['navy', '深空蓝'], ['paper', '纸张白'], ['green', '护眼绿']].map(([key, label]) => `<label class="appearance-swatch ${key}"><input type="radio" name="theme" value="${key}" ${preferences.theme === key ? 'checked' : ''}><span>${label}</span></label>`).join('')}</div></div>
-    <div class="field full"><label class="row"><input name="useCustomBackground" type="checkbox" ${preferences.background ? 'checked' : ''}> 自定义底色</label><input name="background" type="color" value="${preferences.background || { navy: '#222d3d', paper: '#faf7ee', green: '#e4eddf' }[preferences.theme]}"></div>
-    <div class="field full"><label class="appearance-upload">＋ 上传背景图片<input id="writing-background-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif"></label><span class="muted">PNG、JPEG、WebP 或 GIF，最大 2 MB。</span>${preferences.image ? `<img class="appearance-preview" src="${esc(preferences.image)}" alt="当前背景"><label><input type="checkbox" name="clearImage"> 移除背景图片</label>` : ''}</div>
-    ${numeric('imageOpacity', '图片显示强度', 0, 1, .05)}
+  const backgroundBody = `<p class="settings-intro">为正文添加自己的背景图片。界面配色可在右上角「外观」中调整。</p>
+    <div class="background-dropzone" id="background-dropzone">
+      <input id="writing-background-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+      <div class="background-empty"><span class="upload-symbol" aria-hidden="true">▧</span><strong>将图片拖到这里</strong><span>或选择设备里的图片</span></div>
+      <img class="appearance-preview" alt="背景图片预览" hidden>
+      <button type="button" class="btn secondary" id="choose-background-file">选择图片</button>
+      <small>PNG / JPEG / WebP / GIF · 最大 2 MB</small>
+    </div>
+    <div class="background-file-row"><span id="background-file-name" class="muted">尚未选择图片</span><button type="button" class="btn small secondary" id="remove-background-image" hidden>移除图片</button></div>
+    <p id="background-file-error" class="settings-error" role="alert" hidden></p>
+    <div class="form-grid background-controls">${numeric('imageOpacity', '图片显示强度', 0, 1, .05)}
     <div class="field"><label>横向网格线</label><select name="grid">${[['none', '无'], ['solid', '实线'], ['dashed', '虚线']].map(([key, label]) => `<option value="${key}" ${preferences.grid === key ? 'selected' : ''}>${label}</option>`).join('')}</select></div></div>`;
   openModal({ title: section === 'background' ? '背景' : '字体与排版', body: `<div class="writing-appearance" data-section="${section}">${section === 'font' ? fontBody : backgroundBody}</div>`, footer: '<button class="btn secondary" data-close-modal>取消</button><button class="btn secondary" data-action="reset-writing-appearance">恢复默认</button><button class="btn" data-action="save-writing-appearance">应用</button>' });
+  $('.modal').classList.add('writing-settings-dialog');
   $$('.writing-appearance input[type="range"]').forEach((slider) => slider.addEventListener('input', () => { slider.parentElement.querySelector('output').textContent = slider.value; }));
+  if (section === 'background') attachBackgroundUpload(preferences.image);
+}
+
+function attachBackgroundUpload(originalImage) {
+  const panel = $('.writing-appearance');
+  const dropzone = $('#background-dropzone');
+  const input = $('#writing-background-file');
+  const preview = dropzone.querySelector('img');
+  const error = $('#background-file-error');
+  let selectionSequence = 0;
+  const updatePreview = (image, name) => {
+    panel.dataset.pendingImage = image;
+    preview.hidden = !image;
+    if (image) preview.src = image; else preview.removeAttribute('src');
+    dropzone.querySelector('.background-empty').hidden = !!image;
+    $('#background-file-name').textContent = image ? name : '尚未选择图片';
+    $('#remove-background-image').hidden = !image;
+  };
+  updatePreview(originalImage || '', '当前背景图片');
+  const choose = async (file) => {
+    const sequence = ++selectionSequence;
+    error.hidden = true;
+    panel.dataset.readingImage = 'true';
+    try {
+      NovelKingWriting.validateBackgroundFile(file);
+      const image = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('图片读取失败，请重新选择'));
+        reader.readAsDataURL(file);
+      });
+      if (sequence === selectionSequence && document.contains(panel)) updatePreview(image, file.name);
+    } catch (failure) {
+      if (sequence === selectionSequence && document.contains(panel)) { error.textContent = failure.message; error.hidden = false; }
+    } finally {
+      if (sequence === selectionSequence) panel.dataset.readingImage = 'false';
+    }
+  };
+  $('#choose-background-file').addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { if (input.files[0]) choose(input.files[0]); });
+  $('#remove-background-image').addEventListener('click', () => { ++selectionSequence; input.value = ''; panel.dataset.readingImage = 'false'; error.hidden = true; updatePreview('', ''); });
+  dropzone.addEventListener('dragover', (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; dropzone.classList.add('dragover'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+  dropzone.addEventListener('drop', (event) => { event.preventDefault(); dropzone.classList.remove('dragover'); if (event.dataTransfer.files[0]) choose(event.dataTransfer.files[0]); });
 }
 
 async function saveWritingAppearance() {
+  const panel = $('.writing-appearance');
+  if (panel.dataset.readingImage === 'true') throw new Error('图片正在读取，请稍后应用');
   const values = collectModalData($('.modal'));
-  const section = $('.writing-appearance')?.dataset.section || 'font';
-  if (section === 'background') values.theme = $('.writing-appearance input[name="theme"]:checked')?.value || state.writingPreferences.theme;
+  const section = panel.dataset.section || 'font';
   if (String(values.customFont || '').trim()) values.font = values.customFont.trim();
-  if (section === 'background' && !$('.modal input[name="useCustomBackground"]')?.checked) values.background = '';
-  const selected = $('#writing-background-file')?.files?.[0];
-  let image = state.writingPreferences?.image || '';
-  if ($('.modal input[name="clearImage"]')?.checked) image = '';
-  if (selected) {
-    if (selected.size > 2 * 1024 * 1024 || !/^image\/(png|jpeg|webp|gif)$/.test(selected.type)) throw new Error('请选择不超过 2 MB 的 PNG、JPEG、WebP 或 GIF 图片');
-    image = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(new Error('图片读取失败'));
-      reader.readAsDataURL(selected);
-    });
-  }
-  state.writingPreferences = NovelKingWriting.savePreferences(localStorage, NovelKingWriting.mergeAppearance(state.writingPreferences, section, { ...values, image }));
+  if (section === 'background') values.image = panel.dataset.pendingImage || '';
+  state.writingPreferences = NovelKingWriting.savePreferences(localStorage, NovelKingWriting.mergeAppearance(state.writingPreferences, section, values));
   applyWritingPreferences();
   closeModal();
 }
@@ -3327,7 +3383,7 @@ async function renderWriting(content) {
       <button class="workspace-brand" data-action="back-works" title="返回书架">▰ <span>Novel-King</span></button><span class="workspace-title-divider"></span>
       <input id="writing-work-name" value="${esc(state.work?.title || '未命名作品')}" aria-label="作品名称" title="修改作品名称">
       <div class="workspace-mode-tabs"><button data-action="writing-prose" aria-pressed="true">正文</button><button data-action="writing-canvas" aria-pressed="false">大纲画布</button></div>
-      <span class="grow"></span><span class="workspace-autosave-label">自动保存已开启</span>
+      <span class="grow"></span><span class="workspace-autosave-label">自动保存已开启</span><button class="workspace-button workspace-title-action" data-action="open-global-appearance" title="调整全局配色与界面风格">◐ 外观</button>
       <button class="workspace-button workspace-title-action" data-action="edit-work" data-id="${state.workId}">作品设置</button>
       <button class="workspace-button workspace-title-action" data-action="open-command-palette" title="搜索章节、角色与设定（Ctrl / Cmd + K）">${writingIcon('find')} 搜索</button>
     </header>
@@ -13720,6 +13776,16 @@ async function handleAction(action, actionEl, e) {
         openWritingAppearance(action === 'writing-background' ? 'background' : 'font');
         break;
 
+      case 'open-global-appearance':
+        openGlobalAppearance();
+        break;
+      case 'save-global-appearance':
+        saveGlobalAppearance();
+        break;
+      case 'reset-global-appearance':
+        applyGlobalAppearance({});
+        closeModal();
+        break;
       case 'save-writing-appearance':
         await saveWritingAppearance();
         break;
@@ -16066,10 +16132,11 @@ async function init() {
   const topbarRight = $('#topbar-right');
   if (topbarRight) {
     topbarRight.innerHTML = `<button class="btn small secondary" data-action="open-command-palette" title="搜索（Ctrl/Cmd+K）">⌕ 搜索</button>
-      <button class="btn small secondary" id="theme-toggle" data-action="toggle-theme" aria-label="切换主题"></button>
+      <button class="btn small secondary" data-action="open-global-appearance" title="调整全局配色与界面风格">◐ 外观</button>
       <details class="topbar-more"><summary>⋯</summary><div><button class="btn small trace-btn" id="trace-toggle" data-action="trace-toggle" title="记录操作以排查问题">运行追踪</button>
       <button class="btn small danger" data-action="shutdown-server" title="关闭服务后本页面将失效">关闭服务</button></div></details>`;
-    applyTheme(document.documentElement.dataset.theme || 'light', { persist: false });
+    applyGlobalAppearance(NovelKingAppearance.read(localStorage), { persist: false });
+    window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', () => { const preferences = NovelKingAppearance.read(localStorage); if (preferences.mode === 'system') applyGlobalAppearance(preferences, { persist: false }); });
   }
   updateSidebarToggleIcon();
   // 🐞 运行追踪：刷新后若后端仍在录制则自动接上；否则只更新按钮显示。

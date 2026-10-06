@@ -26,6 +26,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** @type {{name: string, cmd: string[], why: string}[]} */
 export const CHECKS = [
+  { name: '全局外观（风格/深浅模式/迁移/持久化）', cmd: ['--test', 'scripts/test-appearance.mjs'], why: '全局外观与正文背景分离，损坏偏好可恢复' },
   { name: '剧情画布保存与 AI（隔离 HTTP + 本地假模型）', cmd: ['--test', 'scripts/test-canvas-http.mjs'], why: '完整场景持久化、冲突拒绝、作品隔离、全图 AI 输入与候选不写入' },
   { name: '画布会话与剧情图（保存串行/失败保留/连线校验/快捷键）', cmd: ['--test', 'scripts/test-canvas-session.mjs'], why: '保存途中编辑不丢失，剧情图与工具快捷键可验证' },
   { name: '写作工作台交互（偏好/创建去重/发布文本/查找）', cmd: ['--test', 'scripts/test-writing-workspace.mjs'], why: '写作偏好不污染正文，失败及快速连点可恢复' },

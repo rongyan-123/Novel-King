@@ -38,7 +38,7 @@ class El {
     this.tagName = String(tag).toUpperCase();
     this.children = [];
     this.dataset = {};
-    this.style = {};
+    this.style = { setProperty(key, value) { this[key] = String(value); } };
     this._html = '';
     this.textContent = '';
     this.value = '';
@@ -958,6 +958,7 @@ let runtimeError = null;
 try {
   // R08：index.html 里 /long-text.js 先于 /app.js 加载；桩环境必须同序，
   // 否则 app.js 里的分段模块会缺失（而这个缺失本身是**故意**的硬失败，不是静默降级）。
+  new vm.Script(fs.readFileSync(path.join(repoRoot, 'public', 'appearance.js'), 'utf8'), { filename: 'appearance.js' }).runInContext(ctx, { timeout: 10000 });
   const longTextSrc = fs.readFileSync(path.join(repoRoot, 'public', 'long-text.js'), 'utf8');
   new vm.Script(longTextSrc, { filename: 'long-text.js' }).runInContext(ctx, { timeout: 10000 });
   new vm.Script(fs.readFileSync(path.join(repoRoot, 'public', 'writing-workspace.js'), 'utf8'), { filename: 'writing-workspace.js' }).runInContext(ctx, { timeout: 10000 });

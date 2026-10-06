@@ -4,17 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Novel-King · 写作工作台</title>
+  <script src="/appearance.js"></script>
   <script>
-    (() => {
-      try {
-        const saved = localStorage.getItem('ns_theme');
-        const mode = saved === 'light' || saved === 'dark' ? saved
-          : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        document.documentElement.dataset.theme = mode;
-      } catch (_) {
-        document.documentElement.dataset.theme = 'light';
-      }
-    })();
+    NovelKingAppearance.apply(document, NovelKingAppearance.read(localStorage), matchMedia('(prefers-color-scheme: dark)').matches);
   </script>
   <link rel="stylesheet" href="/styles.css">
 </head>

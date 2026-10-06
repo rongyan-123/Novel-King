@@ -10,14 +10,14 @@ before(async () => {
 test('偏好损坏、未知键及越界值不会破坏写作布局', () => {
   const defaults = writing.readPreferences({ getItem: () => '{broken' });
   assert.equal(defaults.fontSize, 20);
-  assert.equal(defaults.theme, 'navy');
+  assert.equal('theme' in defaults, false);
   const normalized = writing.normalizePreferences({ fontSize: 200, width: -100, lineHeight: 'bad', margin: 999, theme: 'bad', font: 'url(evil)', extra: true });
   assert.equal(normalized.fontSize, 36);
   assert.equal(normalized.width, 480);
   assert.equal(normalized.lineHeight, 2);
   assert.equal(normalized.margin, 200);
   assert.equal(normalized.font, defaults.font);
-  assert.equal(normalized.theme, 'navy');
+  assert.equal('theme' in normalized, false);
   assert.equal('extra' in normalized, false);
 });
 
@@ -28,9 +28,9 @@ test('偏好存储及恢复，拒绝外部背景地址和非法颜色', () => {
   const restored = writing.readPreferences(storage);
   assert.equal(restored.fontSize, 24);
   assert.equal(restored.width, 1000);
-  assert.equal(restored.background, '#123456');
+  assert.equal('background' in restored, false);
   assert.equal(writing.normalizePreferences({ image: 'https://external.test/pixel', background: 'red;display:none' }).image, '');
-  assert.equal(writing.normalizePreferences({ background: 'red;display:none' }).background, '');
+  assert.equal('background' in writing.normalizePreferences({ background: 'red;display:none' }), false);
   assert.equal(writing.normalizePreferences({ image: 'data:image/png;base64,YWJj' }).image, 'data:image/png;base64,YWJj');
   assert.throws(() => writing.savePreferences({ setItem: () => { throw new Error('quota'); } }, {}), /quota/);
 });
@@ -87,7 +87,7 @@ test('字体设置只更新排版，保留背景和目录偏好；背景设置�
   const font = writing.mergeAppearance(original, 'font', { fontSize: 26, indent: false, paragraphGap: false, background: '#ffffff' });
   assert.equal(font.fontSize, 26);
   assert.equal(font.indent, false);
-  assert.equal(font.background, '#123456');
+  assert.equal('background' in font, false);
   assert.equal(font.image, original.image);
   assert.equal(font.catalogWidth, 380);
   assert.equal(font.catalogCollapsed, true);
@@ -95,7 +95,7 @@ test('字体设置只更新排版，保留背景和目录偏好；背景设置�
   assert.equal(background.fontSize, 26);
   assert.equal(background.grid, 'dashed');
   assert.equal(background.imageOpacity, .3);
-  assert.equal(background.theme, 'paper');
+  assert.equal('theme' in background, false);
 });
 
 test('选中空卷后在该卷建章；未分卷和已删除卷不会误用当前章节的卷', () => {
@@ -104,4 +104,13 @@ test('选中空卷后在该卷建章；未分卷和已删除卷不会误用当�
   assert.equal(writing.chapterVolume(volumes, null, 3), null);
   assert.equal(writing.chapterVolume(volumes, undefined, 3), 3);
   assert.equal(writing.chapterVolume(volumes, 99, 3), null);
+});
+
+test('背景上传拒绝非图片和超限文件，原有图片不被旧配色覆盖', () => {
+  assert.equal(writing.validateBackgroundFile({ type: 'image/png', size: 2048 }), true);
+  assert.throws(() => writing.validateBackgroundFile({ type: 'image/svg+xml', size: 20 }), /图片/);
+  assert.throws(() => writing.validateBackgroundFile({ type: 'image/png', size: 2097153 }), /2 MB/);
+  const preferences = writing.normalizePreferences({ theme: 'navy', background: '#123456', image: 'data:image/png;base64,YWJj' });
+  assert.equal(preferences.image, 'data:image/png;base64,YWJj');
+  assert.equal('theme' in preferences, false);
 });

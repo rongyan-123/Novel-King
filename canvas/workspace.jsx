@@ -28,6 +28,7 @@ export async function mountCanvas(host, options) {
   const initial = await options.request(`/canvas?work_id=${options.workId}`);
   let canvasAPI, destroyed = false;
   let updateStatus = () => {};
+  let updateTheme = () => {};
   const session = createCanvasSession({ initial, save: (body) => options.request(`/canvas?work_id=${options.workId}`, { method: 'PUT', body }), onStatus: (status) => updateStatus(status) });
   const snapshot = () => persistentScene(canvasAPI.getSceneElementsIncludingDeleted(), canvasAPI.getAppState(), canvasAPI.getFiles());
   const flush = async () => {
@@ -39,6 +40,8 @@ export async function mountCanvas(host, options) {
   function Workspace() {
     const apiRef = useRef(null);
     const importRef = useRef(null);
+    const [theme, setTheme] = useState(options.theme === 'dark' ? 'dark' : 'light');
+    updateTheme = setTheme;
     const [status, setStatus] = useState({ state: 'saved', message: '画布已保存' });
     const [selectedIds, setSelectedIds] = useState([]);
     const [chapterId, setChapterId] = useState('');
@@ -162,7 +165,7 @@ export async function mountCanvas(host, options) {
         <button className={aiOpen ? 'active' : ''} onClick={() => setAIOpen(!aiOpen)}>AI 剧情助手</button>
       </div>
       <div className={`canvas-stage ${aiOpen ? 'ai-open' : ''}`}>
-        <div className="canvas-editor-area"><Excalidraw langCode="zh-CN" aiEnabled={false} validateEmbeddable={false} theme={options.theme === 'navy' ? 'dark' : 'light'} name={`${options.title}-大纲`} initialData={{ ...initial.scene, appState: { currentItemFontFamily: 2, currentItemRoughness: 0, ...initial.scene.appState } }} excalidrawAPI={(api) => { apiRef.current = api; canvasAPI = api; }} handleKeyboardGlobally={false} UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, toggleTheme: false } }}
+        <div className="canvas-editor-area"><Excalidraw langCode="zh-CN" aiEnabled={false} validateEmbeddable={false} theme={theme} name={`${options.title}-大纲`} initialData={{ ...initial.scene, appState: { currentItemFontFamily: 2, currentItemRoughness: 0, ...initial.scene.appState } }} excalidrawAPI={(api) => { apiRef.current = api; canvasAPI = api; }} handleKeyboardGlobally={false} UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, toggleTheme: false } }}
           onChange={(elements, appState, files) => {
             if (destroyed) return;
             session.update(persistentScene(elements, appState, files));
@@ -170,7 +173,7 @@ export async function mountCanvas(host, options) {
             setSelectedIds((previous) => previous.join() === selection.join() ? previous : selection);
           }}
           onLinkOpen={(element, event) => { event.preventDefault(); if (options.chapters.some((chapter) => chapter.id === element.customData?.chapterId)) options.openChapter(element.customData.chapterId); else options.notify('请通过「关联章节」连接当前作品的章节', 'error'); }}>
-          <MainMenu><MainMenu.DefaultItems.ClearCanvas /><MainMenu.DefaultItems.ToggleGrid /><MainMenu.DefaultItems.ChangeCanvasBackground /></MainMenu>
+          <MainMenu><MainMenu.Item data-testid="novel-canvas-grid" onSelect={() => canvasAPI.updateScene({ appState: { gridModeEnabled: !canvasAPI.getAppState().gridModeEnabled } })}>显示 / 隐藏网格</MainMenu.Item><MainMenu.DefaultItems.ChangeCanvasBackground /><MainMenu.Separator /><MainMenu.DefaultItems.ClearCanvas /></MainMenu>
         </Excalidraw></div>
         {aiOpen && <aside className="canvas-ai-panel"><header><b>AI 剧情助手</b><button aria-label="关闭画布 AI" onClick={() => setAIOpen(false)}>✕</button></header><p>AI 会读取整张图，以及本作品的章节、角色与设定。</p><label>使用模型<select value={configId} onChange={(event) => setConfigId(event.target.value)}>{!options.configs.length && <option value="">尚未配置</option>}{options.configs.map((config) => <option key={config.id} value={config.id}>{config.name} · {config.model}</option>)}</select></label><button onClick={options.openAISettings}>配置 AI</button><textarea aria-label="画布 AI 要求" rows="5" maxLength="8000" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="例如：把主角发现秘密到身份反转整理成剧情图，标出伏笔。" /><label className="canvas-vision"><input type="checkbox" checked={vision} onChange={(event) => setVision(event.target.checked)} />识图：同时发送全图图片</label><small>识图需要支持图片的模型；文字模型可理解文字和连线。</small><div className="canvas-ai-actions"><button disabled={busy} onClick={guard(() => runAI('advice'))}>给我建议</button><button className="canvas-primary" disabled={busy} onClick={guard(() => runAI('diagram'))}>{busy ? '正在构思…' : '生成剧情图'}</button></div>{answer && <div className="canvas-ai-answer"><p>{answer.proposal?.advice || answer.reply}</p>{answer.proposal?.nodes.map((node, index) => <div className="canvas-proposal-node" key={node.id}><b>{index + 1}.</b> {node.text}</div>)}{answer.proposal?.edges.map((edge, index) => <small key={index}>{edge.from} → {edge.to} {edge.label}<br /></small>)}{!!answer.proposal?.nodes.length && <button className="canvas-primary" onClick={guard(applyProposal)}>加入画布（可撤销）</button>}</div>}{error && <p className="canvas-error" role="alert">{error}</p>}</aside>}
       </div>
@@ -179,5 +182,5 @@ export async function mountCanvas(host, options) {
   }
   const root = createRoot(host);
   root.render(<Workspace />);
-  return { flush, dispose() { destroyed = true; session.dispose(); root.unmount(); updateStatus = () => {}; }, refresh() { canvasAPI?.refresh(); }, snapshot };
+  return { flush, setTheme(theme) { updateTheme(theme); }, dispose() { destroyed = true; session.dispose(); root.unmount(); updateStatus = () => {}; }, refresh() { canvasAPI?.refresh(); }, snapshot };
 }

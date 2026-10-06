@@ -2,7 +2,7 @@
 (() => {
   const preferenceKey = 'novel_king_writing_preferences';
   const fonts = ['"Microsoft YaHei", sans-serif', 'SimSun, serif', 'KaiTi, serif', 'Arial, sans-serif'];
-  const defaults = Object.freeze({ font: fonts[0], fontSize: 20, lineHeight: 2, width: 960, margin: 64, indent: true, paragraphGap: true, theme: 'navy', background: '', image: '', imageOpacity: .35, grid: 'none', catalogWidth: 274, catalogCollapsed: false });
+  const defaults = Object.freeze({ font: fonts[0], fontSize: 20, lineHeight: 2, width: 960, margin: 64, indent: true, paragraphGap: true, image: '', imageOpacity: .35, grid: 'none', catalogWidth: 274, catalogCollapsed: false });
   function normalizePreferences(candidate = {}) {
     const preferences = candidate && typeof candidate === 'object' ? candidate : {};
     const bounded = (key, minimum, maximum) => {
@@ -16,8 +16,6 @@
       font: validFont ? font : defaults.font,
       fontSize: bounded('fontSize', 14, 36), lineHeight: bounded('lineHeight', 1.2, 3),
       width: bounded('width', 480, 1400), margin: bounded('margin', 12, 200),
-      theme: ['navy', 'paper', 'green'].includes(preferences.theme) ? preferences.theme : defaults.theme,
-      background: /^#[0-9a-f]{6}$/i.test(preferences.background || '') ? preferences.background : '',
       image: image.length <= 2800000 && /^data:image\/(png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(image) ? image : '',
       indent: preferences.indent !== false, paragraphGap: preferences.paragraphGap !== false,
       imageOpacity: bounded('imageOpacity', 0, 1), grid: ['none', 'solid', 'dashed'].includes(preferences.grid) ? preferences.grid : 'none',
@@ -26,9 +24,14 @@
   }
   function mergeAppearance(current, section, changes) {
     const keys = section === 'font' ? ['font', 'fontSize', 'lineHeight', 'width', 'margin', 'indent', 'paragraphGap']
-      : ['theme', 'background', 'image', 'imageOpacity', 'grid'];
+      : ['image', 'imageOpacity', 'grid'];
     const accepted = Object.fromEntries(keys.filter((key) => Object.hasOwn(changes, key)).map((key) => [key, changes[key]]));
     return normalizePreferences({ ...current, ...accepted });
+  }
+  function validateBackgroundFile(file) {
+    if (!file || !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) throw new Error('请选择 PNG、JPEG、WebP 或 GIF 图片');
+    if (!Number.isFinite(file.size) || file.size <= 0 || file.size > 2 * 1024 * 1024) throw new Error('图片不能为空，最大 2 MB');
+    return true;
   }
   function chapterVolume(volumes, selectedVolumeId, currentVolumeId) {
     const requested = selectedVolumeId === undefined ? currentVolumeId : selectedVolumeId;
@@ -70,5 +73,5 @@
     if (start < 0) start = text.indexOf(query);
     return start < 0 ? null : { start, end: start + query.length };
   }
-  globalThis.NovelKingWriting = Object.freeze({ defaults, fonts, normalizePreferences, mergeAppearance, chapterVolume, readPreferences, savePreferences, createWorkStarter, publicationText, copyPlainText, findMatch });
+  globalThis.NovelKingWriting = Object.freeze({ defaults, fonts, normalizePreferences, mergeAppearance, validateBackgroundFile, chapterVolume, readPreferences, savePreferences, createWorkStarter, publicationText, copyPlainText, findMatch });
 })();
