@@ -3388,6 +3388,7 @@ async function renderWriting(content) {
       <input id="writing-work-name" value="${esc(state.work?.title || '未命名作品')}" aria-label="作品名称" title="修改作品名称">
       <div class="workspace-mode-tabs"><button data-action="writing-prose" aria-pressed="true">正文</button><button data-action="writing-canvas" aria-pressed="false">大纲画布</button></div>
       <span class="grow"></span><span class="workspace-autosave-label">自动保存已开启</span><button class="workspace-button workspace-title-action" data-action="open-global-appearance" title="调整全局配色与界面风格">◐ 外观</button>
+      ${window.NovelKingAccount?.hosted ? `<button class="workspace-button workspace-title-action" data-platform-view="wallet">额度 <span data-platform-balance></span></button>${window.NovelKingAccount.user.role === 'admin' ? '<button class="workspace-button workspace-title-action" data-platform-view="admin">管理后台</button>' : ''}` : ''}
       ${window.NovelKingAccount?.hosted ? `<button class="workspace-button workspace-title-action account-trigger" data-account-menu title="我的账号 · 修改密码 / 退出登录">${esc(window.NovelKingAccount.user.username)}</button>` : ''}
       <button class="workspace-button workspace-title-action" data-action="edit-work" data-id="${state.workId}">作品设置</button>
       <button class="workspace-button workspace-title-action" data-action="open-command-palette" title="搜索章节、角色与设定（Ctrl / Cmd + K）">${writingIcon('find')} 搜索</button>
@@ -7222,7 +7223,7 @@ async function renderAI(content) {
     <div id="stale-banner" class="stale-banner" hidden></div>
     <div class="card mb-12">
       <div class="muted">当前使用：<b>${configs.find((c) => c.id === state.activeConfigId)?.name || '未选择'}</b></div>
-      <div class="muted mt-8">${window.NovelKingAccount?.hosted ? 'API Key 保存在服务器上属于你的个人数据库里。模型请求只会发往管理员允许的 AI 服务商。' : 'API Key 只保存在本机 SQLite 数据库中，不会上传到任何第三方服务器（除你配置的 AI 服务商）。'}</div>
+      <div class="muted mt-8">${window.NovelKingAccount?.hosted ? '个人 API Key 保存在服务器的个人数据库中，不扣平台额度；平台 Key 由管理员在后台配置并加密保存。' : 'API Key 只保存在本机 SQLite 数据库中，不会上传到任何第三方服务器（除你配置的 AI 服务商）。'}</div>
     </div>
     <div class="grid cols-2">
       ${configs.map((c) => {
@@ -7241,12 +7242,11 @@ async function renderAI(content) {
           <div class="muted mt-8">Base URL：${esc(c.base_url)}</div>
           <div class="muted">模型：${esc(c.model)}</div>
           <div class="muted" title="最大 token 是单次生成的字数上限（1 token ≈ 0.6 个汉字），普通写作保持默认即可">温度：${c.temperature} · 最大 token：${c.max_tokens}（单次输出上限）</div>
-          <div class="muted">API Key：${c.api_key ? '••••••' + esc(String(c.api_key).slice(-4)) : '未填写'}</div>
+          <div class="muted">${c.access_mode === 'platform' ? '平台额度调用 · Key 由管理员托管' : 'API Key：' + (c.api_key ? '••••••' + esc(String(c.api_key).slice(-4)) : '未填写')}</div>
           ${testLine}
           <div class="row mt-8">
             <button class="btn small secondary" data-action="test-api-config" data-id="${c.id}">测试连接</button>
-            <button class="btn small secondary" data-action="edit-api-config" data-id="${c.id}">编辑</button>
-            <button class="btn small danger" data-action="delete-api-config" data-id="${c.id}">删除</button>
+            ${c.access_mode === 'platform' ? '<button class="btn small secondary" data-platform-view="pricing">价格 / 参数</button>' : `<button class="btn small secondary" data-action="edit-api-config" data-id="${c.id}">编辑</button><button class="btn small danger" data-action="delete-api-config" data-id="${c.id}">删除</button>`}
           </div>
         </div>`;
       }).join('') || '<div class="empty">还没有 API 配置</div>'}
@@ -16154,6 +16154,7 @@ async function init() {
   if (topbarRight) {
     topbarRight.innerHTML = `<button class="btn small secondary" data-action="open-command-palette" title="搜索（Ctrl/Cmd+K）">⌕ 搜索</button>
       <button class="btn small secondary" data-action="open-global-appearance" title="调整全局配色与界面风格">◐ 外观</button>
+      ${window.NovelKingAccount?.hosted ? `<button class="btn small secondary" data-platform-view="wallet">额度 <span data-platform-balance></span></button>${window.NovelKingAccount.user.role === 'admin' ? '<button class="btn small secondary" data-platform-view="admin">管理后台</button>' : ''}` : ''}
       <details class="topbar-more"><summary>⋯</summary><div><button class="btn small trace-btn" id="trace-toggle" data-action="trace-toggle" title="记录操作以排查问题">运行追踪</button>
       ${window.NovelKingAccount?.hosted ? '' : '<button class="btn small danger" data-action="shutdown-server" title="关闭服务后本页面将失效">关闭服务</button>'}</div></details>
       ${window.NovelKingAccount?.hosted ? `<button class="btn small secondary account-trigger" data-account-menu title="我的账号 · 修改密码 / 退出登录">${esc(window.NovelKingAccount.user.username)}</button>` : ''}`;

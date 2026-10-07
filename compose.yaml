@@ -10,7 +10,8 @@ services:
       NOVELKING_ADMIN_USER: ${NOVELKING_ADMIN_USER:?请设置管理员用户名}
       NOVELKING_ADMIN_PASSWORD: ${NOVELKING_ADMIN_PASSWORD:-}
       NOVELKING_MAX_WORKERS: ${NOVELKING_MAX_WORKERS:-4}
-      NOVELKING_AI_ORIGINS: ${NOVELKING_AI_ORIGINS:-https://api.deepseek.com,https://api.openai.com}
+      NOVELKING_AI_ORIGINS: ${NOVELKING_AI_ORIGINS:-https://api.deepseek.com,https://api.openai.com,https://anyai.token6688.com}
+      NOVELKING_VMQ_CONFIG_FILE: ${NOVELKING_VMQ_CONFIG_FILE:-}
       NOVELKING_REGISTRATION: ${NOVELKING_REGISTRATION:-open}
       NOVELKING_DATABASE_URL: postgres://novelking:${NOVELKING_POSTGRES_PASSWORD:?请设置数据库密码}@postgres:5432/novelking
       NOVELKING_MCP_ORIGINS: ${NOVELKING_MCP_ORIGINS:-https://mcp.exa.ai,https://mcp.tavily.com}

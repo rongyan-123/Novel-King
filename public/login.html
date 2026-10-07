@@ -20,6 +20,7 @@
       <label>用户名<input id="username" name="username" autocomplete="username" required minlength="2" maxlength="32" placeholder="你的用户名"></label>
       <label>密码<div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128" placeholder="请输入密码"><button id="show-password" type="button" aria-label="显示密码">显示</button></div></label>
       <label id="confirm-row" hidden>确认密码<input id="confirm-password" type="password" autocomplete="new-password" maxlength="128" placeholder="再次输入密码"></label>
+      <label id="invitation-row" hidden>邀请码<input id="invitation-code" name="invitation_code" autocomplete="off" maxlength="32" placeholder="管理员提供的邀请码"></label>
       <div id="captcha-row" hidden>
         <label for="captcha-answer">算一道题</label>
         <div class="captcha-controls"><span id="captcha-question" aria-live="polite">正在出题…</span><input id="captcha-answer" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-label="计算题答案" placeholder="答案"><button id="refresh-captcha" class="btn secondary" type="button">换一题</button></div>

@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { db, withTransaction, inTransaction } from './db.js';
+import { createWorkerPlatformConfigs } from './platform/worker-config.mjs';
 import { getCanvas, saveCanvas, validateCanvasScene, canvasAIMessages, parseCanvasProposal } from './canvas-store.mjs';
 import { handleFiles } from './file-library.mjs';
 import { isHarnessAvailable, isHarnessBuilt, runHarnessTaskWithProgress, modelSwitchLoad, harnessRuntimeInfo, setHarnessRepoOverride, looksLikeDshRepo } from './harness.js';
@@ -82,10 +83,12 @@ const publicDir = path.join(__dirname, 'public');
 const PORT = Number(process.env.PORT) || 3737;
 const WORKER_TOKEN = process.env.NOVELKING_WORKER_TOKEN || '';
 const HOSTED = process.env.NOVELKING_HOSTED === '1';
+const workerPlatformConfigs = createWorkerPlatformConfigs(db);
 if (WORKER_TOKEN && process.connected) process.once('disconnect', () => process.exit(0));
 
 function requireHostedAIEndpoint(base) {
   if (!HOSTED) return;
+  if (base === process.env.NOVELKING_PLATFORM_URL) return;
   let endpoint;
   try { endpoint = new URL(base); } catch { throw Object.assign(new Error('AI 接口地址无效'), { status: 403 }); }
   const allowed = (process.env.NOVELKING_AI_ORIGINS || '').split(',');
@@ -1483,7 +1486,7 @@ function getConfigFromBody(body) {
       err.status = 400;
       throw err;
     }
-    return row;
+    return workerPlatformConfigs.resolve(row);
   }
   return {
     base_url: body.base_url || 'https://api.deepseek.com',
@@ -9216,6 +9219,11 @@ async function handleStoryStateRoute({ segments, method, query, req, res }) {
         return sendJSON(res, 200, { ok: true, ...result });
       }
       if (action === 'test') {
+        if (config.access_mode === 'platform') {
+          const response = await fetch(config.base_url + '/models', { headers: { Authorization: `Bearer ${config.api_key}` }, redirect: 'error', signal: AbortSignal.timeout(10000) });
+          if (!response.ok) return sendError(res, response.status, '平台上游尚未配置或不可用，请联系管理员');
+          return sendJSON(res, 200, { ok: true, reply: '平台连接可用；未发送收费生成请求', models: (await response.json()).data });
+        }
         const data = await callAI(config, [{ role: 'user', content: '请只回复：连接成功' }], {
           temperature: 0.1,
           max_tokens: 16
@@ -9271,8 +9279,9 @@ async function handleStoryStateRoute({ segments, method, query, req, res }) {
   if (crudResources.has(resource)) {
     // 存在 id 段但解析失败（如 /api/works/12abc）→ 404，而不是落入列表分支返回全量数据。
     if (segments[2] !== undefined && id === null) return sendError(res, 404, 'Not found');
-    const maskRow = (row) => (resource === 'api_configs' && row ? { ...row, api_key: maskApiKey(row.api_key) } : row);
+    const maskRow = (row) => (resource === 'api_configs' && row ? workerPlatformConfigs.decorate({ ...row, api_key: maskApiKey(row.api_key) }) : row);
     try {
+      if (resource === 'api_configs' && id && workerPlatformConfigs.isPlatform(id) && method !== 'GET') return sendError(res, 403, '平台模型由管理员统一管理，请在平台模型设置中调整个人参数');
       if (method === 'GET' && !id) {
         const where = {};
         const unsupported = [];

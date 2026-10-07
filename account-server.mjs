@@ -6,6 +6,7 @@ import { isIP } from 'node:net';
 import { AccountStore, failure, publicUser } from './accounts/store.mjs';
 import { UserWorkers } from './accounts/workers.mjs';
 import { migrateAdminData } from './accounts/migration.mjs';
+import { createPlatformSystem } from './platform/http.mjs';
 
 const repo = path.dirname(fileURLToPath(import.meta.url));
 const cookieName = 'novelking_session';
@@ -30,7 +31,7 @@ async function jsonBody(req) {
 const send = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(body)); };
 function sessionToken(req) { return String(req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith(cookieName + '='))?.slice(cookieName.length + 1) || ''; }
 
-export async function createAccountServer(env = process.env) {
+export async function createAccountServer(env = process.env, {platformRequest} = {}) {
   const port = Number(env.PORT || 3741);
   const publicUrl = new URL(env.NOVELKING_PUBLIC_ORIGIN || `http://localhost:${port}`);
   const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(publicUrl.hostname);
@@ -38,10 +39,14 @@ export async function createAccountServer(env = process.env) {
   const root = path.resolve(env.NOVELKING_ACCOUNT_ROOT || path.join(repo, 'accounts-data'));
   const store = new AccountStore(root, { captchaTtl: Math.max(100, Math.min(300000, Number(env.NOVELKING_CAPTCHA_TTL_MS) || 120000)), databaseURL: env.NOVELKING_DATABASE_URL, databaseSchema: env.NOVELKING_ACCOUNT_SCHEMA || 'nk_accounts' });
   await store.bootstrap(env.NOVELKING_ADMIN_USER, env.NOVELKING_ADMIN_PASSWORD);
+  let platform;
+  try { platform = createPlatformSystem({accountStore:store,root,env,request:platformRequest}); }
+  catch(error) { store.close(); throw error; }
   const migration = await migrateAdminData(store, env.NOVELKING_LEGACY_DATA_DIR);
   if (migration.migrated) console.log('旧作品、资料和画布已复制到管理员的个人数据库，原目录未改动');
-  const workers = new UserWorkers(root, repo, { maximum: Math.max(1, Math.min(32, Number(env.NOVELKING_MAX_WORKERS) || 4)), aiOrigins: env.NOVELKING_AI_ORIGINS || 'https://api.deepseek.com,https://api.openai.com', databaseURL: env.NOVELKING_DATABASE_URL,
-    mcpOrigins: env.NOVELKING_MCP_ORIGINS, rankReaderURL: env.NOVELKING_RANK_READER_URL, rankReaderToken: env.NOVELKING_RANK_READER_TOKEN });
+  const workers = new UserWorkers(root, repo, { maximum: Math.max(1, Math.min(32, Number(env.NOVELKING_MAX_WORKERS) || 4)), aiOrigins: env.NOVELKING_AI_ORIGINS || 'https://api.deepseek.com,https://api.openai.com,https://anyai.token6688.com', databaseURL: env.NOVELKING_DATABASE_URL,
+    mcpOrigins: env.NOVELKING_MCP_ORIGINS, rankReaderURL: env.NOVELKING_RANK_READER_URL, rankReaderToken: env.NOVELKING_RANK_READER_TOKEN,
+    platformOrigin: `http://127.0.0.1:${port}` });
   const setSession = (res, token) => res.setHeader('Set-Cookie', `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${token ? 14 * 86400 : 0}${publicUrl.protocol === 'https:' ? '; Secure' : ''}`);
   const proxyAddresses = new Set(String(env.NOVELKING_TRUSTED_PROXIES || '').split(',').filter(Boolean));
   function clientIp(req) {
@@ -53,13 +58,18 @@ export async function createAccountServer(env = process.env) {
     res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin'); res.setHeader('X-Frame-Options', 'DENY');
     try {
+      if (req.url.startsWith('/internal/platform/')) return await platform.internal(req,res,new URL(req.url,'http://localhost'),workers);
       if (req.headers.host !== publicUrl.host) throw failure(403, '请求域名不匹配');
       const url = new URL(req.url, publicUrl);
       if (url.origin !== publicUrl.origin || /%2f|%5c|\\/i.test(url.pathname)) throw failure(400, '请求路径不合法');
       const mutating = !['GET', 'HEAD'].includes(req.method);
       if (mutating && (req.headers.origin !== publicUrl.origin || (req.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(req.headers['sec-fetch-site'])))) throw failure(403, '请从本站页面提交操作');
       const ip = clientIp(req);
-      if (url.pathname === '/api/account/status' && req.method === 'GET') return send(res, 200, { enabled: true, registration_open: env.NOVELKING_REGISTRATION !== 'closed' });
+      if (url.pathname === '/api/platform/vmq/notify' && req.method === 'GET') {
+        if (!platform.vmq) throw failure(503,'自动充值尚未配置');
+        await platform.vmq.notify(Object.fromEntries(url.searchParams)); res.writeHead(200,{'Content-Type':'text/plain'}); return res.end('success');
+      }
+      if (url.pathname === '/api/account/status' && req.method === 'GET') return send(res, 200, { enabled: true, registration_open: env.NOVELKING_REGISTRATION !== 'closed', invitation_required:platform.administration.inviteRequired() });
       if (url.pathname === '/api/account/challenge' && req.method === 'GET') {
         if (env.NOVELKING_REGISTRATION === 'closed') throw failure(403, '注册已关闭');
         return send(res, 200, store.challenge(ip));
@@ -70,7 +80,8 @@ export async function createAccountServer(env = process.env) {
         const body = await jsonBody(req);
         store.consumeChallenge(ip, body.challenge_id, body.answer);
         store.limit('registration-daily:' + ip, 5, 86400000);
-        const user = await store.createUser(body.username, body.password);
+        const user = await store.createUser(body.username, body.password, 'user', () => platform.administration.consumeInvitation(body.invitation_code));
+        platform.wallet.wallet(user.id);
         setSession(res, store.newSession(user)); return send(res, 201, { user: publicUser(user) });
       }
       if (url.pathname === '/api/account/login' && req.method === 'POST') {
@@ -94,6 +105,7 @@ export async function createAccountServer(env = process.env) {
         return send(res, 409, { error: '当前账号已切换，请重新打开工作台。旧账号的本地草稿仍保留。', code: 'ACCOUNT_CHANGED' });
       }
       if (url.pathname === '/api/account/me' && req.method === 'GET') return send(res, 200, { user: publicUser(user), hosted: true });
+      if (url.pathname.startsWith('/api/platform/')) return await platform.http(req,res,url,user,workers);
       if (url.pathname === '/api/account/logout' && req.method === 'POST') { store.logout(token); setSession(res, ''); return send(res, 200, { ok: true }); }
       if (url.pathname === '/api/account/password' && req.method === 'POST') {
         store.limit('password:' + user.id, 5, 900000);
@@ -123,7 +135,7 @@ export async function createAccountServer(env = process.env) {
     }
   });
   server.requestTimeout = 30000; server.headersTimeout = 15000;
-  return { server, store, workers, port, host: env.NOVELKING_BIND || '127.0.0.1', close: () => { workers.close(); store.close(); server.close(); server.closeAllConnections(); } };
+  return { server, store, workers, platform, port, host: env.NOVELKING_BIND || '127.0.0.1', close: () => { workers.close(); store.close(); server.close(); server.closeAllConnections(); } };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const app = await createAccountServer();

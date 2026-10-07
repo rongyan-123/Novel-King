@@ -1,6 +1,6 @@
 (() => {
   const $ = selector => document.querySelector(selector);
-  let registering = false, challengeId = null, busy = false, challengeVersion = 0;
+  let registering = false, challengeId = null, busy = false, challengeVersion = 0, invitationRequired = false;
   async function api(route, body) {
     const response = await fetch('/api/account/' + route, { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : {}, ...(body ? { body: JSON.stringify(body) } : {}) });
     const result = await response.json();
@@ -19,6 +19,8 @@
     $('#auth-heading').textContent = next ? '开启你的创作空间' : '继续你的故事';
     $('#auth-submit').textContent = next ? '注册并进入' : '登录';
     $('#captcha-row').hidden = $('#confirm-row').hidden = !next;
+    $('#invitation-row').hidden = !next;
+    $('#invitation-code').required = next && invitationRequired;
     $('#captcha-answer').required = $('#confirm-password').required = next;
     $('#password').minLength = next ? 10 : 1;
     $('#password').autocomplete = next ? 'new-password' : 'current-password';
@@ -37,12 +39,12 @@
     busy = true; $('#auth-submit').disabled = true; $('#auth-message').textContent = registering ? '正在创建个人空间…' : '正在登录…';
     try {
       const body = { username: $('#username').value, password: $('#password').value };
-      if (registering) Object.assign(body, { challenge_id: challengeId, answer: $('#captcha-answer').value });
+      if (registering) Object.assign(body, { challenge_id: challengeId, answer: $('#captcha-answer').value, invitation_code: $('#invitation-code').value || undefined });
       const result = await api(registering ? 'register' : 'login', body);
       try { localStorage.setItem('novelking.activeAccount', result.user.id); } catch {}
       location.assign('/');
     } catch (error) { $('#auth-message').textContent = error.message; if (registering) await refreshChallenge(); }
     finally { busy = false; $('#auth-submit').disabled = false; }
   });
-  api('status').then(result => { $('#register-tab').hidden = !result.registration_open; }).catch(error => { $('#auth-message').textContent = error.message; });
+  api('status').then(result => { $('#register-tab').hidden = !result.registration_open; invitationRequired = result.invitation_required; $('#invitation-code').placeholder = invitationRequired ? '请输入管理员提供的邀请码' : '选填'; }).catch(error => { $('#auth-message').textContent = error.message; });
 })();

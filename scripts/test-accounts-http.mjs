@@ -93,7 +93,10 @@ test('账号分别持有数据库：相同小说 ID 也无法读改另一个账�
   assert.equal((await request(`/api/canvas?work_id=${aliceWork.id}`, 'PUT', { revision: 0, scene }, alice)).status, 200);
   assert.equal((await request(`/api/canvas?work_id=${bobWork.id}`, 'GET', undefined, bob)).body.revision, 0);
   await request('/api/api_configs', 'POST', { name: 'Alice key', api_key: 'secret-alice', base_url: 'https://api.deepseek.com', model: 'deepseek-chat' }, alice);
-  assert.equal((await request('/api/api_configs', 'GET', undefined, bob)).body.length, 0);
+  const bobConfigs = (await request('/api/api_configs', 'GET', undefined, bob)).body;
+  assert.equal(bobConfigs.filter(config => config.access_mode !== 'platform').length, 0);
+  assert.equal(bobConfigs.filter(config => config.access_mode === 'platform').length, 9);
+  assert.ok(!JSON.stringify(bobConfigs).includes('secret-alice'));
   assert.equal((await request('/api/account/users', 'GET', undefined, bob)).status, 403);
   assert.equal((await request('/api/account/users', 'GET', undefined, admin)).body.users.length, 3);
 });

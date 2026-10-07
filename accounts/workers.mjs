@@ -7,9 +7,10 @@ import { failure } from './store.mjs';
 
 const safeEnvKeys = ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'LANG', 'LC_ALL'];
 export class UserWorkers {
-  constructor(root, repo, { maximum = 4, aiOrigins = '', databaseURL = '', mcpOrigins = '', rankReaderURL = '', rankReaderToken = '' } = {}) {
+  constructor(root, repo, { maximum = 4, aiOrigins = '', databaseURL = '', mcpOrigins = '', rankReaderURL = '', rankReaderToken = '', platformOrigin = '' } = {}) {
     this.root = root; this.repo = repo; this.maximum = maximum; this.aiOrigins = aiOrigins; this.workers = new Map();
     this.databaseURL = databaseURL;
+    this.platformOrigin = platformOrigin;
     this.researchEnv = { NOVELKING_MCP_ORIGINS: mcpOrigins || 'https://mcp.exa.ai,https://mcp.tavily.com', NOVELKING_RANK_READER_URL: rankReaderURL, NOVELKING_RANK_READER_TOKEN: rankReaderToken };
     this.sweep = setInterval(() => {
       for (const [id, worker] of this.workers) if (!worker.active && !worker.starting && Date.now() - worker.lastUsed > 600000) this.stop(id);
@@ -35,6 +36,7 @@ export class UserWorkers {
         NOVELSTUDIO_DATA_DIR: dataRoot, NOVELSTUDIO_OV_DISABLED: '1', NOVELSTUDIO_DSH_HOME: path.join(home, '.dsh'),
         HOME: home, USERPROFILE: home, NOVELKING_AI_ORIGINS: this.aiOrigins }, this.researchEnv);
       if (this.databaseURL) Object.assign(env, { NOVELKING_DATABASE_URL: this.databaseURL, NOVELKING_DATABASE_SCHEMA: 'nk_u_' + userId.replaceAll('-', '') });
+      if (this.platformOrigin) env.NOVELKING_PLATFORM_URL = this.platformOrigin + '/internal/platform/' + userId + '/v1';
       const child = worker.child = spawn(process.execPath, ['server.js'], { cwd: this.repo, env, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
       const log = fs.createWriteStream(path.join(dataRoot, 'worker.log'), { flags: 'w', mode: 0o600 });
       child.stdout.pipe(log, { end: false }); child.stderr.pipe(log, { end: false });

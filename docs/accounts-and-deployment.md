@@ -2,6 +2,8 @@
 
 服务器入口是 `npm run start:server`（`account-server.mjs`）。`npm start` 保留为本机单作者入口，**不能把旧入口直接反向代理到公网**。账户版支持开放注册、算术题、登录退出、修改密码、管理员启停账号与重置密码。
 
+平台模型、额度和管理员后台的使用方式见 [平台模型与管理后台](platform-admin-and-billing.md)。
+
 ## 隔离方式
 
 Docker 默认使用 PostgreSQL：账户位于 `nk_accounts` schema，每个账号的作品、模型配置、文件目录、画布与研究记录位于独立的 `nk_u_<用户 UUID 去掉短横线>` schema。上传原件仍在 `accounts-data/users/<用户 UUID>` 的个人目录。这里的“共享资料”只在**一个用户自己的小说之间共享**。
@@ -10,7 +12,7 @@ Docker 默认使用 PostgreSQL：账户位于 `nk_accounts` schema，每个账�
 
 网关验证登录后，把请求交给该账号的独立 Node 进程。进程只监听随机本机端口，另用随机密钥保护；Cookie、外部代理头、Agent 凭证不转发进去。每个进程都有自己的数据库连接、任务、缓存和 HOME，不继承宿主 AI 密钥。浏览器草稿、会话位置和画布快捷键按账号加前缀保存。旧标签页遇到账号切换会锁定，避免串写。
 
-这是应用数据隔离，**不是操作系统沙箱**。账户版封锁旧版 DSH CLI 主机执行、服务器目录读取、全局工具配置、任意路径整库恢复、关闭服务等接口。新 AI 中心使用单独的 DSH 核心循环，读取当前小说与本账号共享资料，提供只读 MCP 和研究技能，不注册 shell、任意文件系统或自动改稿工具。直连模型写作、润色、画布助手仍可用。默认仅允许 `https://api.deepseek.com` 和 `https://api.openai.com`，拒绝 HTTP/私网接口和重定向。添加服务商须由部署管理员配置 `NOVELKING_AI_ORIGINS`，填逗号分隔的可信 HTTPS origin，不要开放用户可控或内网服务。外部 MCP 另用 `NOVELKING_MCP_ORIGINS` 管理。
+这是应用数据隔离，**不是操作系统沙箱**。账户版封锁旧版 DSH CLI 主机执行、服务器目录读取、全局工具配置、任意路径整库恢复、关闭服务等接口。新 AI 中心使用单独的 DSH 核心循环，读取当前小说与本账号共享资料，提供只读 MCP 和研究技能，不注册 shell、任意文件系统或自动改稿工具。直连模型写作、润色、画布助手仍可用。默认允许 `https://api.deepseek.com`、`https://api.openai.com` 和 `https://anyai.token6688.com`，拒绝 HTTP/私网接口和重定向。添加服务商须由部署管理员配置 `NOVELKING_AI_ORIGINS`，填逗号分隔的可信 HTTPS origin，不要开放用户可控或内网服务。外部 MCP 另用 `NOVELKING_MCP_ORIGINS` 管理。
 
 ## 注册与会话
 

@@ -71,13 +71,17 @@ export class AccountStore {
     if (!challenge || challenge.ip_hash !== digest(ip) || challenge.expires_at <= Date.now()
       || !/^\d{1,4}$/.test(String(answer)) || challenge.answer_hash !== digest(challenge.id + ':' + Number(answer))) throw failure(400, '计算题答案错误或已过期，请换一道题');
   }
-  async createUser(username, password, role = 'user') {
+  async createUser(username, password, role = 'user', afterCreate = null) {
     username = validUsername(username); validPassword(password);
     if (this.db.prepare('SELECT id FROM users WHERE username_key=?').get(username.toLowerCase())) throw failure(409, '这个用户名已经被使用');
     const password_hash = await hashPassword(password);
     const id = randomUUID();
-    try { this.db.prepare('INSERT INTO users(id,username,username_key,password_hash,role) VALUES(?,?,?,?,?)').run(id, username, username.toLowerCase(), password_hash, role); }
-    catch (error) { if (String(error.message).includes('UNIQUE')) throw failure(409, '这个用户名已经被使用'); throw error; }
+    try {
+      if (afterCreate) this.db.exec(this.db.kind === 'postgres' ? 'BEGIN' : 'BEGIN IMMEDIATE');
+      this.db.prepare('INSERT INTO users(id,username,username_key,password_hash,role) VALUES(?,?,?,?,?)').run(id, username, username.toLowerCase(), password_hash, role);
+      if (afterCreate) { afterCreate(id); this.db.exec('COMMIT'); }
+    }
+    catch (error) { if (afterCreate) this.db.exec('ROLLBACK'); if (String(error.message).includes('UNIQUE')) throw failure(409, '这个用户名已经被使用'); throw error; }
     return this.db.prepare('SELECT * FROM users WHERE id=?').get(id);
   }
   async bootstrap(username, password) {
@@ -133,6 +137,15 @@ export class AccountStore {
       if (body.disabled) this.db.prepare('DELETE FROM sessions WHERE user_id=?').run(id);
     }
     return publicUser(this.db.prepare('SELECT * FROM users WHERE id=?').get(id));
+  }
+  async verifyAdminPassword(admin,password) {
+    this.limit('admin-confirm:'+admin.id,10,900000);
+    const current=this.db.prepare('SELECT * FROM users WHERE id=?').get(admin.id);
+    if(!current||current.disabled||current.role!=='admin')throw failure(403,'只有管理员可以操作');
+    if(typeof password!=='string'||password.length>128||!await verifyPassword(password,current.password_hash))throw failure(400,'管理员密码不正确');
+    const refreshed=this.db.prepare('SELECT role,disabled,password_hash FROM users WHERE id=?').get(admin.id);
+    if(!refreshed || refreshed.disabled || refreshed.role!=='admin' || refreshed.password_hash!==current.password_hash)throw failure(401,'管理员状态已变更，请重新登录');
+    this.db.prepare('DELETE FROM rate_limits WHERE key=?').run(digest('admin-confirm:'+admin.id));
   }
   async resetPasswordByOperator(username, password) {
     const key = validUsername(username).toLowerCase();

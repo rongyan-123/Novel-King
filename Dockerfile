@@ -7,6 +7,7 @@ COPY ai ./ai
 COPY accounts ./accounts
 COPY canvas ./canvas
 COPY storage ./storage
+COPY platform ./platform
 COPY vendor ./vendor
 COPY public ./public
 COPY harness-plugins ./harness-plugins

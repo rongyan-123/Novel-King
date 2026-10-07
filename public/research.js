@@ -79,7 +79,7 @@
             }
           }
         } catch (error) { message(root, error.message, true); activity.textContent = '研究已结束，记录可在最近研究中查看'; badge.textContent = '已结束'; }
-        finally { session.running = false; session.activeRun = null; start.disabled = false; stop.hidden = true; }
+        finally { session.running = false; session.activeRun = null; start.disabled = false; stop.hidden = true; window.NovelKingPlatform?.refreshBalance(); }
       };
     } else if (session.tab === 'rankings') {
       body.innerHTML = `<div class="research-section-title"><div><h2>榜单资料</h2><p class="muted">只采集公开书名、作者、分类与简介；研究时会标注来源和日期。</p></div><span class="chip">${status.snapshots.length} 份快照</span></div><div class="research-board-grid">${status.boards.map(board => `<article class="research-board"><h3>${escape(board.name)}</h3><p class="muted">${board.id === 'sanjiang' ? '本期推荐书目' : '当前榜单首页书目'}</p><button class="btn secondary small" data-scan-board="${board.id}">采集公开书目</button></article>`).join('')}</div>
