@@ -15,6 +15,7 @@ test('ranking parser retains ordered books and provenance but rejects verificati
   assert.equal(snapshot.source_url, url); assert.equal(snapshot.books[0].url, 'https://www.qidian.com/book/123456/');
   assert.equal(snapshot.books[0].votes, undefined);
   assert.throws(() => parseRankingPage('<html>请完成安全验证 验证码</html>', { url, board: 'newbooks' }), /验证/);
+  assert.throws(() => parseRankingPage('<html><body>尝试太多了2s后自动为您刷新验证码</body></html>', { url, board: 'newbooks' }), /要求完成访问验证/);
   assert.throws(() => parseRankingPage('<html>Unknown new page</html>', { url, board: 'newbooks' }), /结构|榜单/);
   assert.throws(() => rankingURL('file:///secrets'), /榜单/);
   assert.throws(() => validateSnapshot({ ...snapshot, books: [{ title: '', rank: 1 }] }), /书名/);

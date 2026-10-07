@@ -3,6 +3,33 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { runResearchAgent } from '../ai/research/dsh.mjs';
 
+test('DSH restores prior conversation as native model messages and publishes safe text before completion', async () => {
+  const requests = [], updates = [];
+  const server = http.createServer(async (request, response) => {
+    let body = ''; for await (const chunk of request) body += chunk;
+    requests.push(JSON.parse(body));
+    response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    const frame = text => 'data: ' + JSON.stringify({ id: 'fixture', choices: [{ index: 0, delta: { role: 'assistant', content: text }, finish_reason: null }] }) + '\n\n';
+    response.write(frame('进一步解释：主角目标已经明确，但故事引擎无法持续兑现读者期待。这是结构问题。'));
+    await new Promise(resolve => setTimeout(resolve, 80));
+    response.write(frame('上轮结论仍适用。意外回显 private-'));
+    response.end(frame('secret。') + 'data: ' + JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }) + '\n\ndata: [DONE]\n\n');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const result = await runResearchAgent({ config: { base_url: `http://127.0.0.1:${server.address().port}`, api_key: 'private-secret', model: 'fixture' },
+      persona: '小说编辑', prompt: '具体要改哪一层？',
+      history: [{ role: 'user', content: '根据榜单研究我的小说' }, { role: 'assistant', content: '建议重写故事引擎，依据第一章与新书榜。' }],
+      onText: text => updates.push(text) });
+    const messages = requests[0].messages;
+    assert.ok(messages.some(message => message.role === 'user' && message.content.includes('根据榜单')));
+    assert.ok(messages.some(message => message.role === 'assistant' && message.content.includes('故事引擎')));
+    assert.ok(updates.length > 1, 'text must stream before the completed response');
+    assert.doesNotMatch(JSON.stringify(updates), /private-secret|private-/);
+    assert.match(result.text, /已隐藏密钥/);
+  } finally { server.close(); server.closeAllConnections(); }
+});
+
 test('real DSH loop calls a scoped tool via a model HTTP stream then produces the cited response', { timeout: 15000 }, async () => {
   const requests = []; let executed = 0;
   const server = http.createServer(async (request, response) => {

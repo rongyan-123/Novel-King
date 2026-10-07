@@ -8,6 +8,10 @@ test('research MCP tools can read selected work, shared files and its canvas, bu
   database.exec(`CREATE TABLE works(id INTEGER PRIMARY KEY,title TEXT); CREATE TABLE chapters(id INTEGER PRIMARY KEY,work_id INTEGER,title TEXT,content TEXT,summary TEXT,position INTEGER);
     CREATE TABLE characters(id INTEGER PRIMARY KEY,work_id INTEGER,name TEXT,identity TEXT); CREATE TABLE terms(id INTEGER PRIMARY KEY,work_id INTEGER,title TEXT,content TEXT);
     CREATE TABLE world_entries(id INTEGER PRIMARY KEY,work_id INTEGER,title TEXT,content TEXT);
+    CREATE TABLE volumes(id INTEGER PRIMARY KEY,work_id INTEGER,title TEXT,position INTEGER);
+    CREATE TABLE plotlines(id INTEGER PRIMARY KEY,work_id INTEGER,title TEXT,position INTEGER);
+    INSERT INTO volumes VALUES(1,1,'演示第一卷',0),(2,2,'不能读取的其他卷',0);
+    INSERT INTO plotlines VALUES(1,1,'主角获取资格再争夺资源',0),(2,2,'不能读取的其他纲',0);
     CREATE TABLE work_canvases(work_id INTEGER PRIMARY KEY,scene_json TEXT,revision INTEGER);
     CREATE TABLE file_documents(id TEXT PRIMARY KEY,work_id INTEGER,name TEXT,area TEXT,extracted_text TEXT,deleted_at TEXT);
     INSERT INTO works VALUES(1,'我的小说'),(2,'另一作品'); INSERT INTO chapters VALUES(10,1,'开始','秘密设定一', '',0),(20,2,'他书','禁止读取','',0);
@@ -29,6 +33,9 @@ test('research MCP tools can read selected work, shared files and its canvas, bu
     assert.match(sharedFile.content[0].text, /共享参考/);
     const canvas = await tools.client.callTool({ name: 'novel_read_canvas', arguments: {} });
     assert.match(canvas.content[0].text, /第一幕/);
+    const outline = await tools.client.callTool({ name: 'novel_read_outline', arguments: {} });
+    assert.match(outline.content[0].text, /获取资格/);
+    assert.doesNotMatch(outline.content[0].text, /不能读取/);
     assert.equal((await tools.client.callTool({ name: 'delete_file', arguments: { id: 'mine' } })).isError, true);
     await tools.close();
     assert.equal(database.prepare('SELECT count(*) AS n FROM file_documents').get().n, 3);

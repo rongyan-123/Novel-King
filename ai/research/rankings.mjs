@@ -41,7 +41,7 @@ export function validateSnapshot(snapshot) {
 export function parseRankingPage(html, { url, board, captured_at = new Date().toISOString() }) {
   const $ = load(html);
   const pageText = $('body').text();
-  if (/安全验证|访问验证|滑动验证|请输入验证码|请完成.*验证|captcha|access denied/i.test(pageText)) throw failure('起点要求完成访问验证，请在浏览器查看榜单后导入快照');
+  if (/安全验证|访问验证|滑动验证|请输入验证码|刷新验证码|请完成.*验证|captcha|access denied/i.test(pageText)) throw failure('起点要求完成访问验证，请在浏览器查看榜单后导入快照');
   const books = [], ids = new Set();
   if (board === 'sanjiang') {
     const latest = $('.strongrec-list.book-list-wrap').first(), period = latest.find('.date-range-title').text().trim();

@@ -69,7 +69,11 @@ export class ResearchWorkspace {
         const scene = canvas ? JSON.parse(canvas.scene_json) : { elements: [] };
         return { source: `novel:${workId}/canvas`, revision: canvas?.revision || 0, ...textPage(JSON.stringify({ elements: scene.elements,
           image_files: Object.keys(scene.files || {}), image_note: '此工具提供图形结构与文字；图片像素请使用画布页面的 AI 分析。' }), arguments_.offset, arguments_.limit) };
-      } }
+      } },
+      { name: 'novel_read_outline', description: '读取当前小说已有的卷纲和剧情线；上传的大纲文件还须通过 library_read_document 读取。', execute: async () => ({
+        source: `novel:${workId}/outline`,
+        volumes: this.db.prepare('SELECT * FROM volumes WHERE work_id=? ORDER BY position,id').all(workId),
+        plotlines: this.db.prepare('SELECT * FROM plotlines WHERE work_id=? ORDER BY position,id').all(workId) }) }
     ];
     return connectInternalTools([...scope,
       { name: 'library_list_documents', description: '列出当前小说与自己的共享资料，未选小说时仅列共享资料。', execute: async () => ({

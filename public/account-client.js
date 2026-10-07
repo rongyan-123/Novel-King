@@ -47,9 +47,9 @@
   }
   async function loadScript(source) { await new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = source; script.onload = resolve; script.onerror = () => reject(Error('页面资源加载失败，请刷新')); document.body.append(script); }); }
   async function start() {
-    const statusResponse = await originalFetch('/api/account/status');
+    const statusResponse = await originalFetch('/api/account/status', { signal: AbortSignal.timeout(15000) });
     if (statusResponse.ok) {
-      const response = await originalFetch('/api/account/me');
+      const response = await originalFetch('/api/account/me', { signal: AbortSignal.timeout(15000) });
       if (response.status === 401) { location.replace('/login'); return; }
       if (!response.ok) throw Error('无法读取账号，请刷新');
       const { user } = await response.json();
@@ -72,10 +72,14 @@
       try { localStorage.setItem('novelking.activeAccount', user.id); } catch {}
       window.addEventListener('storage', event => { if (event.key === 'novelking.activeAccount' && event.newValue !== user.id) lock('其他标签页已经退出或切换账号，这个工作台已锁定。'); });
     } else if (statusResponse.status !== 404) throw Error('账户服务暂时不可用，请刷新');
-    await loadScript('/long-text.js'); await loadScript('/writing-workspace.js'); await loadScript('/file-library.js'); await loadScript('/research.js'); await loadScript('/platform.js'); await loadScript('/app.js');
+    await Promise.all(['/navigation.js', '/long-text.js', '/writing-workspace.js', '/file-library.js', '/research.js', '/agent-chat.js', '/platform.js'].map(loadScript));
+    await loadScript('/app.js');
     if (window.NovelKingAccount) {
       document.addEventListener('click', event => { if (event.target.closest('[data-account-menu]')) showAccount(window.NovelKingAccount.user); });
     }
   }
-  start().catch(error => { document.getElementById('content').textContent = error.message; });
+  start().catch(error => {
+    document.getElementById('content').innerHTML = `<section class="page-loading" role="alert"><h1>暂时无法打开工作台</h1><p>${escapeHTML(error.name === 'TimeoutError' ? '连接超时，请检查网络后重试。' : error.message)}</p><button class="btn" id="bootstrap-retry">重新加载</button></section>`;
+    document.getElementById('bootstrap-retry').onclick = () => location.reload();
+  });
 })();

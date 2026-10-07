@@ -25,17 +25,18 @@
   function message(root, text, error = false) { const box = root.querySelector('.research-notice'); if (box) { box.textContent = text; box.dataset.error = String(error); box.hidden = !text; } }
   function prettyDate(value) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : ''; }
   function safeLink(url, title) { try { const parsed = new URL(url); if (parsed.protocol !== 'https:') return escape(title); return `<a href="${escape(parsed.href)}" target="_blank" rel="noopener noreferrer">${escape(title)} ↗</a>`; } catch { return escape(title); } }
-  async function mount(root, { works = [], configs = [], activeConfigId, workId } = {}) {
-    if (session.work === null) session.work = workId ? String(workId) : '';
+  async function mount(root, { works = [], configs = [], activeConfigId, workId, tab, settingsOnly = false, onUseSkill } = {}) {
+    if (tab) session.tab = tab;
+    if (settingsOnly || session.work === null) session.work = workId ? String(workId) : '';
     root.innerHTML = '<div class="empty">正在读取 AI 中心…</div>';
     let status;
     try { status = await request('status?work_id=' + encodeURIComponent(session.work)); }
     catch (error) { root.innerHTML = `<div class="card"><h2>AI 中心暂时不可用</h2><p>${escape(error.message)}</p><p class="muted">如果刚更新了程序，请重启服务器。</p></div>`; return; }
     if (!root.isConnected) return;
-    const refresh = () => mount(root, { works, configs, activeConfigId, workId });
+    const refresh = () => mount(root, { works, configs, activeConfigId, workId, settingsOnly, onUseSkill });
     const selectedConfig = configs.find(config => config.id === activeConfigId) || configs[0];
     root.innerHTML = `<div class="research-center"><header class="research-header"><div><div class="research-eyebrow">NOVEL KING / WRITING RESEARCH</div><h1>AI 中心</h1><p>读懂你的作品，研究榜单，再决定怎么写。</p></div><label class="research-work-label">当前作品<select id="research-work"><option value="">共享资料与榜单</option>${works.map(work => `<option value="${work.id}" ${String(work.id) === session.work ? 'selected' : ''}>${escape(work.title)}</option>`).join('')}</select></label></header>
-      <nav class="research-tabs" aria-label="AI 中心功能">${[['research', '创作研究'], ['rankings', '榜单资料'], ['models', '模型配置'], ['tools', '工具与技能']].map(([key, name]) => `<button type="button" data-research-tab="${key}" aria-selected="${session.tab === key}" class="${session.tab === key ? 'active' : ''}">${name}</button>`).join('')}</nav>
+      <nav class="research-tabs" aria-label="AI 中心功能">${[...(!settingsOnly ? [['research', '创作研究']] : []), ['models', '模型配置'], ['tools', '工具与技能'], ['rankings', '榜单资料']].map(([key, name]) => `<button type="button" data-research-tab="${key}" aria-selected="${session.tab === key}" class="${session.tab === key ? 'active' : ''}">${name}</button>`).join('')}</nav>
       <p class="research-notice" role="status" hidden></p><div class="research-body"></div><footer class="research-footer">DSH ${escape(status.version)} · ${status.storage === 'postgres' ? 'PostgreSQL' : 'SQLite'} · API 密钥保存在你的个人数据库中</footer></div>`;
     const body = root.querySelector('.research-body');
     root.querySelector('#research-work').onchange = event => { session.work = event.target.value; session.latest = null; refresh(); };
@@ -96,7 +97,7 @@
       const saveConnector = async connector => { const saved = await request('connectors', { ...connector, enabled: false, allowed_tools: [] }); await refresh(); root.querySelector(`[data-test-mcp="${saved.id}"]`)?.click(); };
       body.querySelector('#research-exa').onclick = async () => { try { const existing = status.connectors.find(connection => connection.endpoint === 'https://mcp.exa.ai/mcp'); if (existing) body.querySelector(`[data-test-mcp="${existing.id}"]`).click(); else await saveConnector({ name: 'Exa 网页搜索', endpoint: 'https://mcp.exa.ai/mcp' }); } catch (error) { message(root, error.message, true); } };
       body.querySelector('#research-mcp-form').onsubmit = async event => { event.preventDefault(); try { await saveConnector(Object.fromEntries(new FormData(event.target))); } catch (error) { message(root, error.message, true); } };
-      body.querySelectorAll('[data-use-skill]').forEach(button => button.onclick = () => { session.skill = button.dataset.useSkill; session.tab = 'research'; refresh(); });
+      body.querySelectorAll('[data-use-skill]').forEach(button => button.onclick = () => { if (onUseSkill) return onUseSkill(button.dataset.useSkill); session.skill = button.dataset.useSkill; session.tab = 'research'; refresh(); });
       body.querySelectorAll('[data-delete-mcp]').forEach(button => button.onclick = async () => { if (!confirm('删除这个 MCP 服务配置？')) return; try { await request('connectors/' + button.dataset.deleteMcp, null, 'DELETE'); refresh(); } catch (error) { message(root, error.message, true); } });
       body.querySelectorAll('[data-test-mcp]').forEach(button => button.onclick = async () => {
         const connection = status.connectors.find(candidate => candidate.id === button.dataset.testMcp); button.disabled = true;

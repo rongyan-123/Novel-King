@@ -32,3 +32,15 @@ test('choosing shared research stays shared even when the writing workspace has 
   assert.equal(requests[1], '/api/research/status?work_id=');
   assert.match(nodes.get('.research-body').innerHTML, /当前可查阅共享资料和榜单/);
 });
+
+test('chat settings use the selected conversation book after switching between novels', async () => {
+  const requests = [], nodes = new Map();
+  const root = { isConnected: true, querySelectorAll: () => [], querySelector(selector) {
+    if (!nodes.has(selector)) nodes.set(selector, { querySelector: root.querySelector.bind(root), querySelectorAll: () => [] });
+    return nodes.get(selector);
+  } };
+  const sandbox = { window: {}, fetch: async route => { requests.push(route); return { ok: true, json: async () => ({ skills: [], runs: [], boards: [], snapshots: [], connectors: [], version: 'fixture' }) }; } };
+  vm.runInNewContext(fs.readFileSync(new URL('../public/research.js', import.meta.url), 'utf8'), sandbox);
+  for (const workId of [7, 8, null]) await sandbox.window.NovelKingResearch.mount(root, { workId, settingsOnly: true, tab: 'models' });
+  assert.deepEqual(requests, ['/api/research/status?work_id=7', '/api/research/status?work_id=8', '/api/research/status?work_id=']);
+});

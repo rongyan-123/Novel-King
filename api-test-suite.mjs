@@ -55,7 +55,7 @@ async function main() {
   console.log('== A. 静态服务与路径安全 ==');
   {
     const r = await api('GET', '/');
-    record('A1 首页返回 200 且含产品名', r.status === 200 && r.text.includes('Novel Studio'), `status=${r.status}`);
+    record('A1 首页返回 200 且含产品名', r.status === 200 && r.text.includes('Novel-King'), `status=${r.status}`);
     const r2 = await api('GET', '/app.js');
     record('A2 静态资源 app.js 200', r2.status === 200 && r2.text.includes('novel'), `status=${r2.status}`);
     const raw = await rawHttp('GET /../package.json HTTP/1.1\r\nHost: 127.0.0.1:3738\r\nConnection: close\r\n\r\n');

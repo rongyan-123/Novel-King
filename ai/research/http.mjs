@@ -4,6 +4,7 @@ import { runResearchAgent } from './dsh.mjs';
 import { RESEARCH_SKILLS, getResearchSkill } from './skills.mjs';
 import { BOARDS, scanRanking } from './rankings.mjs';
 import { connectRemoteTools, validateMcpEndpoint } from './mcp.mjs';
+import { createChatHandler } from './chat-http.mjs';
 
 const failure = (status, message) => Object.assign(new Error(message), { status });
 const persona = `你是 Novel-King 的小说研究助手。只研究用户当前选择的作品以及其共享资料。
@@ -14,12 +15,14 @@ const persona = `你是 Novel-King 的小说研究助手。只研究用户当前
 export function createResearchHandler({ database, readBody, sendJSON, isAgentRequest, requireAIEndpoint }) {
   const workspace = new ResearchWorkspace(database), active = new Map();
   const origins = process.env.NOVELKING_MCP_ORIGINS || 'https://mcp.exa.ai,https://mcp.tavily.com';
+  const chatHTTP = createChatHandler({ database, workspace, readBody, sendJSON, active, origins, requireAIEndpoint });
   const getRun = id => { const row = database.prepare('SELECT * FROM research_runs WHERE id=?').get(id); if (!row) throw failure(404, '研究记录不存在'); return { ...row, events: JSON.parse(row.events_json), events_json: undefined }; };
   const publicConnector = row => ({ ...row, api_key: undefined, has_key: Boolean(row.api_key), allowed_tools: JSON.parse(row.allowed_tools), enabled: Boolean(row.enabled) });
   const connector = id => { const row = database.prepare('SELECT * FROM research_connectors WHERE id=?').get(id); if (!row) throw failure(404, 'MCP 配置不存在'); return { ...row, allowed_tools: JSON.parse(row.allowed_tools) }; };
   return async function researchHTTP(req, res, url) {
     if (isAgentRequest(req)) throw failure(403, '研究配置与作业管理仅限作者；Agent 请使用所提供的只读 MCP 工具');
     const action = url.pathname.split('/')[3], id = url.pathname.split('/')[4], subaction = url.pathname.split('/')[5];
+    if (action === 'conversations') return chatHTTP(req, res, url);
     const workId = workspace.work(url.searchParams.get('work_id'), true);
     if (action === 'status' && req.method === 'GET') return sendJSON(res, 200, { engine: 'DSH', version: '0.1.0-rc.5',
       storage: database.kind || 'sqlite', skills: RESEARCH_SKILLS.map(({ text, ...skill }) => skill), boards: BOARDS,

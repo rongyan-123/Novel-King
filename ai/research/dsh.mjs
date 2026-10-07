@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Context, LlmRuntime, DeepSeekAdapter, SessionStore, SystemPrompt, ToolRuntime, defineTool,
   AgentRegistry, AgentLoop, createUserMessage, SessionId, resolveRetryPolicy } from '../../vendor/dsh-research/runtime.mjs';
 
-export async function runResearchAgent({ config, prompt, persona, tools = [], signal, onEvent = () => {}, maxSteps = 12, timeoutMs = 300000, secrets = [] }) {
+export async function runResearchAgent({ config, prompt, persona, tools = [], signal, onEvent = () => {}, onText = () => {}, history = [], maxSteps = 18, timeoutMs = 300000, secrets = [] }) {
   if (!config?.api_key) throw Object.assign(new Error('请先在模型配置中保存 API 密钥'), { status: 400 });
   const ctx = new Context(); const events = [];
   const deepseekEndpoint = new URL(config.base_url).hostname === 'api.deepseek.com';
@@ -16,7 +16,14 @@ export async function runResearchAgent({ config, prompt, persona, tools = [], si
   }
   const privateKeys = [...new Set([config.api_key, ...secrets].filter(Boolean))];
   const redact = value => privateKeys.reduce((text, secret) => text.replaceAll(secret, '[已隐藏密钥]'), value);
-  let handle, steps = 0, budgetExceeded = false, eventBytes = 0;
+  let handle, steps = 0, budgetExceeded = false, eventBytes = 0, stepText = '';
+  const holdback = Math.max(0, ...privateKeys.map(secret => secret.length - 1));
+  const publishText = final => {
+    const safe = redact(stepText);
+    // Hold the trailing characters until a secret spanning multiple chunks can
+    // be recognized. Publish snapshots, never reasoning or raw stream chunks.
+    onText(final ? safe : safe.slice(0, Math.max(0, safe.length - holdback)));
+  };
   const deadline = AbortSignal.timeout(timeoutMs);
   const cancellation = signal ? AbortSignal.any([signal, deadline]) : deadline;
   try {
@@ -35,15 +42,32 @@ export async function runResearchAgent({ config, prompt, persona, tools = [], si
       parameters: tool.parameters, output: { schema: { type: 'json' }, render: (_arguments, value) => [{ type: 'text', text: JSON.stringify(value) }] },
       async execute(arguments_, execution) { return tool.execute(arguments_, { signal: execution.signal }); } }));
     ctx.on('session/event', (_session, event) => {
+      if (event.type === 'step/start') stepText = '';
+      if (event.type === 'assistant/chunk') {
+        const chunk = event.data?.chunk;
+        if (chunk?.type === 'text-delta') { stepText += chunk.text; publishText(false); }
+        return;
+      }
       // Request headers contain model and tool schemas; never include credential
       // configuration. Bound durable transcripts independently of model context.
       if (!['assistant/message', 'user/message', 'tool/call', 'tool/result', 'turn/end', 'step/start'].includes(event.type)) return;
       const serialized = redact(JSON.stringify(event)); const bytes = Buffer.byteLength(serialized); eventBytes += bytes;
       if (eventBytes > 4 * 1024 * 1024) { budgetExceeded = true; handle?.agent.cancel({ kind: 'hook', reason: '研究记录超过限制' }); return; }
       const safeEvent = JSON.parse(serialized); events.push(safeEvent); onEvent(safeEvent);
+      if (event.type === 'assistant/message') {
+        stepText = event.data.message.content.filter(block => block.type === 'text').map(block => block.text).join('\n');
+        publishText(true);
+      }
       if (event.type === 'step/start' && ++steps > maxSteps) { budgetExceeded = true; handle?.agent.cancel({ kind: 'hook', reason: '研究步数达到上限' }); }
     });
-    handle = await ctx.agents.create({ sessionId: SessionId(randomUUID()), agentOptions: { provider, model: config.model, maxTokens: Math.max(256, Math.min(16384, Number(config.max_tokens) || 4096)) } });
+    const previous = ctx.sessions.prepare(SessionId(randomUUID()));
+    for (const message of history) {
+      if (!['user', 'assistant'].includes(message.role) || typeof message.content !== 'string') throw Error('会话历史格式不正确');
+      const created = createUserMessage({ content: [{ type: 'text', text: message.content }], source: { kind: 'user' } });
+      if (message.role === 'user') previous.append('user/message', created, { surfaceOp: 'append' });
+      else previous.append('assistant/message', { message: { ...created, role: 'assistant', source: { kind: 'model', provider, model: config.model } } }, { surfaceOp: 'append', sourceEventSeqs: [] });
+    }
+    handle = await ctx.agents.create({ sessionId: SessionId(randomUUID()), seed: previous.log, agentOptions: { provider, model: config.model, maxTokens: Math.max(256, Math.min(16384, Number(config.max_tokens) || 4096)) } });
     if (Number.isFinite(Number(config.temperature))) handle.agent.ctx.on('agent/request', async (_payload, next) => ({ ...await next(), temperature: Math.max(0, Math.min(2, Number(config.temperature))) }));
     const cancel = () => handle.agent.cancel({ kind: 'user' });
     cancellation.addEventListener('abort', cancel, { once: true });

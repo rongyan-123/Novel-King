@@ -68,7 +68,7 @@ const state = {
   workId: null,
   work: null,
   loadedWorkId: null,
-  view: 'works',
+  view: 'ai',
   chapters: [],
   volumes: [],
   plotlines: [],
@@ -196,7 +196,7 @@ const state = {
   recoveryForChapter: null,
   commandPalette: { open: false, query: '', items: [], active: 0, seq: 0, visibleItems: [], returnFocus: null, status: 'idle', error: '' },
   lastRenderedRoute: null,
-  sidebarCollapsed: (() => { try { const saved = accountLocalStorage.getItem('ns_sidebar_collapsed'); return saved === '1' || (saved === null && typeof window !== 'undefined' && window.innerWidth <= 720); } catch (_) { return typeof window !== 'undefined' && window.innerWidth <= 720; } })()
+  sidebarCollapsed: (() => { try { const saved = accountLocalStorage.getItem('ns_sidebar_collapsed'); return saved === '1' || (typeof window !== 'undefined' && window.innerWidth <= 720); } catch (_) { return typeof window !== 'undefined' && window.innerWidth <= 720; } })()
 };
 
 // 合并后的侧栏板块：小说设定 / AI创造板块（进入作品后）
@@ -208,6 +208,8 @@ const HOME_AI_VIEWS = ['ai-create', 'ai'];
 
 // 统一跳转：把旧子页面视图映射到对应的板块；未进入作品时按初始页视图分流。
 function goView(view) {
+  closeMobileSidebar();
+  if (view === 'ai') { state.view = 'ai'; return; }
   if (SETTINGS_VIEWS.includes(view)) {
     state.settingsTab = view;
     state.view = 'settings';
@@ -918,6 +920,12 @@ function setSidebar(show) {
   if (backdrop) backdrop.classList.toggle('visible', show && !state.sidebarCollapsed && window.innerWidth <= 720);
 }
 
+function closeMobileSidebar() {
+  if (window.innerWidth > 720) return;
+  state.sidebarCollapsed = true;
+  setSidebar(true);
+}
+
 function setEditorComposition(composing) {
   state.editorComposing = !!composing;
   state.imeComposing = !!composing;
@@ -978,7 +986,8 @@ function saveGlobalAppearance() {
 
 function updateSidebarTitle() {
   let text = state.work ? state.work.title : '我的书架';
-  if (!state.workId && (state.view === 'ai-create' || state.view === 'ai')) text = state.view === 'ai' ? 'AI 中心' : 'AI 创作';
+  if (state.view === 'ai' || state.view === 'library') text = state.view === 'ai' ? 'AI 中心' : '文件库';
+  else if (!state.workId && state.view === 'ai-create') text = 'AI 创作';
   $('#sidebar-title').textContent = text;
 }
 
@@ -1107,7 +1116,9 @@ async function ensureSavedBeforeNavigation() {
 function updateNavVisibility() {
   $$('#sidebar-nav button[data-view]').forEach((b) => {
     const v = b.dataset.view;
-    if (v === 'works' || v === 'ai-create' || v === 'ai' || v === 'thanks') {
+    if (v === 'ai' || v === 'works') {
+      b.classList.remove('hidden');
+    } else if (v === 'ai-create' || v === 'thanks') {
       // 「我的作品」「✨ AI 创作」「🙏 借鉴与致谢」只在未进入作品时显示
       b.classList.toggle('hidden', !!state.workId);
     } else if (v === 'logs' || v === 'trace' || v === 'library') {
@@ -1119,7 +1130,7 @@ function updateNavVisibility() {
   });
   $$('.nav-section-label').forEach((label) => {
     const section = label.dataset.navSection;
-    const visible = section === 'global' ? !state.workId : section === 'workspace' ? !!state.workId : true;
+    const visible = section === 'global' ? true : section === 'workspace' ? !!state.workId : true;
     label.classList.toggle('hidden', !visible);
   });
 }
@@ -1130,18 +1141,22 @@ function setActiveNav() {
     let active = v === state.view;
     if (v === 'settings' && (state.view === 'settings' || SETTINGS_VIEWS.includes(state.view))) active = true;
     if (v === 'ai-board' && (state.view === 'ai-board' || AI_VIEWS.includes(state.view))) active = true;
-    if (v === 'ai-create' && !state.workId && (state.view === 'ai-create' || state.view === 'ai')) active = true;
+    if (v === 'ai-create' && !state.workId && state.view === 'ai-create') active = true;
     b.classList.toggle('active', active);
   });
 }
 
-async function renderView() {
+async function renderView(content = $('#content'), isActive = () => true) {
   if (state.view !== 'library' && typeof NovelKingFileLibrary !== 'undefined') NovelKingFileLibrary.dispose();
+  if (state.view !== 'ai' && state.view !== 'ai-board') window.NovelKingChat?.dispose();
   if (writingCanvas) { writingCanvas.dispose(); writingCanvas = null; }
-  const content = $('#content');
   content.classList.remove('king-workspace');
   document.body.classList.remove('king-writing-active');
   document.body.classList.remove('king-canvas-active');
+  if (state.view === 'ai') {
+    setSidebar(true); updateNavVisibility(); setActiveNav(); updateSidebarTitle(); setTopbarTitle('AI 中心');
+    return renderAIHome(content);
+  }
   if (state.view !== 'logs') {
     // F-31：离开日志页时清理自动刷新定时器，避免在其它页面空轮询。
     if (logsAutoTimer) { clearInterval(logsAutoTimer); logsAutoTimer = null; }
@@ -1188,6 +1203,7 @@ async function renderView() {
       setTopbarTitle(state.view === 'ai-create' ? '✨ AI 创作' : 'AI 中心');
       try {
         await ensureApiConfigs();
+        if (!isActive()) return;
         if (state.view === 'ai-create') return renderAICreateHome(content);
         return renderAIHome(content);
       } catch (e) {
@@ -1199,13 +1215,14 @@ async function renderView() {
     updateSidebarTitle();
     setTopbarTitle('Novel-King');
     setActiveNav();
-    return renderWorks();
+    return renderWorks(content, isActive);
   }
   setSidebar(true);
   setActiveNav();
   updateNavVisibility();
   try {
     await loadWorkData();
+    if (!isActive()) return;
     updateSidebarTitle();
     setTopbarTitle(state.work ? state.work.title : '作品');
     // F-35：goView 已将 plot/outline/terms/characters/memory 统一映射到 settings、ai-create/ai/st 映射到 ai-board，
@@ -1218,19 +1235,20 @@ async function renderView() {
       case 'writing': return renderWriting(content);
       case 'overview': return renderOverview(content);
       case 'library': return renderLibrary(content);
-      case 'works': return renderWorks();
+      case 'works': return renderWorks(content, isActive);
       case 'logs': return renderLogs(content);
       case 'trace': return renderTrace(content);
       default: return renderOverview(content);
     }
   } catch (e) {
+    if (!isActive()) return;
     // D13：会话记忆里的作品可能已被删除——回到初始页而不是停留在报错页。
     if (state.workId && (e.message === 'Not found' || /不存在/.test(e.message))) {
       state.workId = null;
       state.loadedWorkId = null;
       state.view = 'works';
       persistSession();
-      return renderWorks();
+      return renderWorks(content, isActive);
     }
     content.innerHTML = `<div class="empty">加载失败：${esc(e.message)}</div>`;
   }
@@ -1409,7 +1427,10 @@ function renderLogs(content) {
   logsAutoTimer = setInterval(() => refreshLogs(), 5000);
 }
 
+let renderSequence = 0;
+const viewNavigation = window.NovelKingNavigation?.create();
 async function render() {
+  const ticket = ++renderSequence;
   if (writingCanvas && !(await writingCanvas.flush())) {
     if (state.lastRenderedRoute) Object.assign(state, state.lastRenderedRoute);
     return;
@@ -1420,8 +1441,12 @@ async function render() {
     if (state.lastRenderedRoute) Object.assign(state, state.lastRenderedRoute);
     return false;
   }
+  if (ticket !== renderSequence) return;
   document.body.classList.remove('writing-focus-active');
-  await renderView();
+  const labels = { ai: 'AI 中心', works: '我的书架', library: '文件库', writing: '写作台', settings: '角色与设定', 'ai-board': 'AI 工具', overview: '作品统计' };
+  const route = viewNavigation?.begin($('#content'), labels[state.view] || '工作台');
+  await renderView(route?.content || $('#content'), route?.active || (() => ticket === renderSequence));
+  if (ticket !== renderSequence || (route && !route.active())) return;
   state.lastRenderedRoute = Object.fromEntries(['workId', 'work', 'loadedWorkId', 'view', 'settingsTab', 'aiTab', 'currentChapterId'].map((key) => [key, state[key]]));
   persistSession();
   // 编辑器在 DOM 里时才刷新「生成稿 / 上次审稿」条（异步，不阻塞渲染）。
@@ -2475,8 +2500,7 @@ async function exportTraceSession(file) {
 
 
 
-async function renderWorks() {
-  const content = $('#content');
+async function renderWorks(content = $('#content'), isActive = () => true) {
   await loadWorks();
   const works = state.works;
   // F-30：示例状态缓存到 state，安装/删除时失效，避免每次渲染都请求 /demo/status。
@@ -2497,6 +2521,7 @@ async function renderWorks() {
     while (queue.length) await loadWorkMeta(queue.shift().id).catch(() => null);
   });
   await Promise.all(workers);
+  if (!isActive()) return;
   const sortedWorks = [...visibleWorks].sort((a, b) => {
     const aTime = String(a.updated_at || a.created_at || '');
     const bTime = String(b.updated_at || b.created_at || '');
@@ -2800,7 +2825,9 @@ async function renderAICreateHome(content) {
 }
 
 async function renderAIHome(content) {
+  if (window.NovelKingChat) return renderAI(content);
   await ensureApiConfigs();
+  if (content.isConnected === false) return;
   await renderAI(content);
   const actions = content.querySelector('.page-head .page-actions');
   if (actions) {
@@ -7208,6 +7235,8 @@ function renderStaleBanner() {
 }
 
 async function renderAI(content) {
+  if (window.NovelKingChat) return window.NovelKingChat.mount(content, { works: state.works, configs: state.apiConfigs, activeConfigId: state.activeConfigId, workId: state.workId,
+    onConfigChange: id => { state.activeConfigId = id; accountLocalStorage.setItem('ns_active_config', String(id)); } });
   if (window.NovelKingResearch) return window.NovelKingResearch.mount(content, { works: state.works, configs: state.apiConfigs, activeConfigId: state.activeConfigId, workId: state.workId });
   const configs = state.apiConfigs;
   content.innerHTML = `
@@ -16012,6 +16041,7 @@ document.addEventListener('click', async (e) => {
   const btn = e.target.closest('#sidebar-nav button[data-view]');
   if (!btn) return;
   if (!(await ensureSavedBeforeNavigation())) return;
+  closeMobileSidebar();
   state.view = btn.dataset.view;
   await render();
 });
@@ -16138,11 +16168,7 @@ window.addEventListener('beforeunload', (e) => {
 async function init() {
   // P4：先取 AI 策略快照（模型档位 / 档位→强度表），让后续所有 AI 调用按同一份策略解析。
   // 失败不阻塞启动——policyModel/policyEffort 会退回本文件顶部的兜底常量。
-  try {
-    state.aiPolicy = await api('/ai/policy');
-  } catch (_) {
-    state.aiPolicy = null;
-  }
+  api('/ai/policy', { timeout: 15000 }).then(policy => { state.aiPolicy = policy; }).catch(() => { state.aiPolicy = null; });
   $('#global-search').addEventListener('focus', () => {
     const q = $('#global-search').value.trim();
     if (q) debouncedSearch();
@@ -16180,12 +16206,13 @@ async function init() {
     }
   }
   if (!state.workId) {
-    // R06：首页视图（含「借鉴与致谢」）刷新后恢复；没有记录或记录非法时回到「我的作品」。
-    let homeView = '';
-    try { homeView = accountSessionStorage.getItem('ns_home_view') || ''; } catch (_) { /* 存储不可用时静默 */ }
-    state.view = ['works', 'ai-create', 'ai', 'thanks', 'library'].includes(homeView) ? homeView : 'works';
+    // Fresh visits open chat. A saved in-progress writing route is restored above.
+    state.view = 'ai';
   }
   await render();
 }
 
-init().catch((e) => toast(e.message, 'error'));
+init().catch((e) => {
+  $('#content').innerHTML = `<section class="page-loading" role="alert"><h1>工作台加载失败</h1><p>${esc(e.message)}</p><button class="btn" id="app-retry">重新加载</button></section>`;
+  $('#app-retry').onclick = () => location.reload();
+});

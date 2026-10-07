@@ -329,7 +329,7 @@
     }
   }
   window.NovelKingFileLibrary = {
-    async mount(root, options) { if (current && !(await current.flush())) return; current?.dispose(); current = new FileLibrary(root, options); await current.render(); },
+    async mount(root, options) { if (!root.isConnected) return; if (current && !(await current.flush())) return; if (!root.isConnected) return; current?.dispose(); current = new FileLibrary(root, options); await current.render(); },
     async flush() { return current ? current.flush() : true; },
     dispose() { current?.dispose(); current = null; },
   };
