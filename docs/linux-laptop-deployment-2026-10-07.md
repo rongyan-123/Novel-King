@@ -51,6 +51,8 @@ Docker 容器总内存上限为 2912 MiB，约 2.84 GiB；不是预先占用该�
 
 ## 启停与备份
 
+日常更新允许直接 SSH 部署，不依赖 GitHub Actions。当前 Agent 版本实际通过 SSH 同步源码、在服务器构建带提交号的镜像、修改应用镜像标签，并用 `compose up -d --no-deps --no-build --wait novel-king` 更新应用容器。源码推送与生产发布独立进行；发布后检查健康状态和实际功能，保留旧镜像和原数据卷便于回滚。
+
 ```bash
 ssh rong-ubuntu
 cd /opt/novel-king

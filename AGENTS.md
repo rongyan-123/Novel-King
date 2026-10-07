@@ -9,6 +9,7 @@
 - 运维目录：`/opt/novel-king`；源码：`/opt/novel-king/app`。
 - 使用系统 Docker：`sudo docker --context default`。`rong` 用户默认的 `desktop-linux` 属于另一套 Docker，不能混用。
 - Compose 项目：`novelking`；启动使用运维目录中的 `.env` 和 `compose.server.yaml`。
+- 部署偏好：允许直接 SSH 到服务器构建或载入带版本的 Docker 镜像，再更新本项目对应容器；不要求通过 GitHub Actions 部署。GitHub 推送、CI 测试与生产发布可以独立进行。继续保留现有数据卷、资源限制、备份和可回滚的旧镜像。
 - 管理员继续使用 `owner`，与本机原账号 UUID 相同。
 - 数据库卷 `novelking_postgres-data`，文件卷 `novelking_novel-king-data`；证书卷 `novelking_caddy-data` 与 `novelking_caddy-config`。
 - 内存上限：应用 1536 MiB、PostgreSQL 512 MiB、榜单浏览器 768 MiB、HTTPS 网关 96 MiB；总计 2912 MiB。写作进程最多 2 个；保留单任务榜单采集。
