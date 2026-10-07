@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { doubledCostMicros, MAX_MICROS, problem } from './money.mjs';
+import { migratePostpaidWallet } from './wallet-migration.mjs';
 const now = () => new Date().toISOString();
 const safeAmount = (amount, signed = false) => {
   if (!Number.isSafeInteger(amount) || (!signed && amount < 0) || Math.abs(amount) > MAX_MICROS) throw problem(400,'金额超出范围');
@@ -17,6 +18,7 @@ export class PlatformStore {
       CREATE TABLE IF NOT EXISTS platform_audit(id TEXT PRIMARY KEY,actor_id TEXT,action TEXT NOT NULL,target_id TEXT,note TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS platform_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
     `);
+    migratePostpaidWallet(database);
   }
   transaction(operation) {
     this.db.exec(this.db.kind === 'postgres' ? 'BEGIN' : 'BEGIN IMMEDIATE');
@@ -53,7 +55,10 @@ export class PlatformStore {
         ledger:this.db.prepare('SELECT * FROM platform_ledger WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 100').all(userId) };
     });
   }
-  reserve(userId,{ requestId,fingerprint,model,amountMicros }) {
+  beginCall(userId,request) {
+    return this.reserve(userId,{...request,amountMicros:0,postpaid:true});
+  }
+  reserve(userId,{ requestId,fingerprint,model,amountMicros,postpaid=false }) {
     safeAmount(amountMicros);
     if (typeof requestId !== 'string' || requestId.length<1 || requestId.length>160) throw problem(400,'请求编号不正确');
     return this.transaction(() => {
@@ -64,10 +69,16 @@ export class PlatformStore {
         if (previous.status==='released') throw problem(409,'这次调用已终止，请重新发起');
         return { ...previous,replayed:true,response:JSON.parse(previous.response_json) };
       }
-      if (wallet.available<amountMicros) throw problem(402,'平台额度不足，请充值或使用自己的 API Key');
+      const pending=this.db.prepare("SELECT billing_mode FROM platform_calls WHERE user_id=? AND status='reserved'").all(userId);
+      if ((postpaid&&pending.length)||pending.some(call=>call.billing_mode==='postpaid')) throw problem(429,'上一次平台模型调用正在结算，请稍后重试');
+      if (postpaid ? wallet.available<=0 : wallet.available<amountMicros) throw Object.assign(problem(402,'平台额度不足，请充值或使用自己的 API Key；管理员配置的上游余额与个人额度分别计算'),{code:'platform_balance_insufficient'});
+      // Lock the existing positive balance, never a worst-case price estimate.
+      // This serializes postpaid calls across processes without allowing debt
+      // to fund another request while the first measured bill is outstanding.
+      if (postpaid) amountMicros=wallet.available;
       const id=randomUUID(),created=now();
-      this.db.prepare("INSERT INTO platform_calls(id,user_id,request_id,fingerprint,model,amount_micros,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'reserved',?,?)")
-        .run(id,userId,requestId,fingerprint,model,amountMicros,created,created);
+      this.db.prepare("INSERT INTO platform_calls(id,user_id,request_id,fingerprint,model,amount_micros,status,created_at,updated_at,billing_mode) VALUES(?,?,?,?,?,?,'reserved',?,?,?)")
+        .run(id,userId,requestId,fingerprint,model,amountMicros,created,created,postpaid?'postpaid':'prepaid');
       return { id,status:'reserved',amount_micros:amountMicros };
     });
   }
@@ -78,9 +89,10 @@ export class PlatformStore {
       const wallet=this.lock(userId),call=this.db.prepare('SELECT * FROM platform_calls WHERE id=? AND user_id=?').get(id,userId);
       if (!call || call.status==='released') throw problem(409,'这次调用已终止，不能结算');
       if (call.status==='settled') return { response:JSON.parse(call.response_json),chargedMicros:call.charged_micros,balanceMicros:call.balance_after_micros,replayed:true };
-      const charge=Math.min(requested,call.amount_micros),balance=wallet.balance-charge;
-      if (balance<0 || balance<wallet.held-call.amount_micros) throw problem(409,'钱包状态冲突');
-      const receipt={requestId:call.request_id,model:call.model,chargedMicros:charge,balanceMicros:balance-(wallet.held-call.amount_micros),maximumChargeMicros:call.amount_micros,capped:requested>charge,usage};
+      const postpaid=call.billing_mode==='postpaid',charge=postpaid?requested:Math.min(requested,call.amount_micros),balance=safeAmount(wallet.balance-charge,true);
+      if (!postpaid&&(balance<0 || balance<wallet.held-call.amount_micros)) throw problem(409,'钱包状态冲突');
+      const receipt={requestId:call.request_id,model:call.model,chargedMicros:charge,balanceMicros:balance-(wallet.held-call.amount_micros),
+        ...(postpaid?{billingMode:'postpaid'}:{maximumChargeMicros:call.amount_micros}),capped:requested>charge,usage};
       const saved={...response,novelking_billing:receipt};
       this.db.prepare('UPDATE platform_wallets SET balance_micros=? WHERE user_id=?').run(balance,userId);
       if (charge>0) this.entry(userId,'usage',-charge,balance,'模型消费：上游实际费用 × 2',call.request_id);
@@ -113,8 +125,8 @@ export class PlatformStore {
         if (previous.kind!=='adjustment' || previous.amount_micros!==amountFen*10000 || previous.note!==note) throw problem(409,'请求编号对应的调整内容已改变');
         return {balanceMicros:wallet.available,replayed:true};
       }
-      const balance=safeAmount(wallet.balance+amountFen*10000);
-      if (balance<wallet.held) throw problem(409,'不能扣减已经预留的额度');
+      const balance=safeAmount(wallet.balance+amountFen*10000,true);
+      if (amountFen<0&&balance<Math.max(0,wallet.held)) throw problem(409,'不能扣减已经预留的额度或增加欠费');
       this.db.prepare('UPDATE platform_wallets SET balance_micros=? WHERE user_id=?').run(balance,userId);
       const entry=this.entry(userId,'adjustment',amountFen*10000,balance,note,requestId,null,actor);
       this.audit(actor,'wallet.adjust',userId,note);

@@ -1,6 +1,6 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {MODEL_CATALOG,validateSettings} from './provider.mjs';
-import {doubledCostMicros,maximumCharge,problem} from './money.mjs';
+import {doubledCostMicros,problem} from './money.mjs';
 import {requestPublic,boundedText} from './transport.mjs';
 
 export class PlatformRelay {
@@ -16,6 +16,34 @@ export class PlatformRelay {
     const ids=payload.data.map(row=>row.id);
     if(ids.some(id=>typeof id!=='string'||!id.trim()||id.length>256||id.includes(provider.apiKey)||/[\x00-\x1f]/.test(id)))throw problem(502,'上游模型列表无效');
     return {ok:true,models:[...new Set(ids)].sort(),message:'已读取模型列表；未发送收费聊天请求。'};
+  }
+  async balanceStatus({refresh=false}={}) {
+    let provider;
+    try {provider=this.vault.active();}
+    catch {return {status:'disabled',availableBalance:null,currency:null,checkedAt:null,message:'尚未配置可用上游，请先保存并启用 API Key。'};}
+    const key=createHash('sha256').update(JSON.stringify([provider.id,provider.baseUrl,provider.apiKey])).digest('hex');
+    if(this.pendingBalance?.key===key)return this.pendingBalance.promise;
+    if(!refresh&&this.balanceCache?.key===key&&Date.now()-this.balanceCache.time<60000)return this.balanceCache.snapshot;
+    const promise=(async()=>{
+      const snapshot={providerId:provider.id,providerName:provider.name,status:'unavailable',availableBalance:null,currency:null,checkedAt:new Date().toISOString()};
+      try {
+        const response=await this.request(provider.baseUrl+'/skills/balance',{headers:{Authorization:'Bearer '+provider.apiKey},signal:AbortSignal.timeout(10000)});
+        if(!response.ok){
+          await response.body?.cancel();
+          snapshot.message=[401,403].includes(response.status)?'上游 Key 无效或没有余额查询权限。':[404,405].includes(response.status)?'此上游不支持余额查询接口。':'上游余额接口暂不可用，请稍后刷新。';
+        }else{
+          let payload;try{payload=JSON.parse(await boundedText(response,64*1024));}catch{payload=null;}
+          const currency=payload?.currency,raw=payload?.available_balance;
+          const amount=typeof raw==='string'&&currency==='USD'?raw.replace(/^\$/,''):raw;
+          if(!['USD','CNY'].includes(currency)||typeof amount!=='string'||amount.length>40||!(/^-?\d+(\.\d+)?$/).test(amount)||!Number.isFinite(Number(amount))){
+            snapshot.message='上游余额数据格式不完整，暂时无法读取。';
+          }else Object.assign(snapshot,{status:Number(amount)>0?'available':'exhausted',availableBalance:amount,currency});
+        }
+      }catch{snapshot.message='无法连接上游余额接口，请稍后刷新。';}
+      this.balanceCache={key,time:Date.now(),snapshot};return snapshot;
+    })();
+    this.pendingBalance={key,promise};
+    try{return await promise;}finally{if(this.pendingBalance?.promise===promise)this.pendingBalance=null;}
   }
   async pricing(model,provider=this.vault.active()) {
     validateSettings(model,{});const key=createHash('sha256').update(JSON.stringify([provider.id,provider.baseUrl,provider.apiKey,model])).digest('hex');
@@ -61,18 +89,20 @@ export class PlatformRelay {
     const fingerprint=createHash('sha256').update(encoded).digest('hex');
     // Replay must work even if prices or the currently selected upstream changed.
     const previous=this.wallet.db.prepare('SELECT * FROM platform_calls WHERE user_id=? AND request_id=?').get(userId,requestId);
-    if(previous?.status==='settled')return this.wallet.reserve(userId,{requestId,fingerprint,model:body.model,amountMicros:previous.amount_micros});
+    if(previous?.status==='settled')return this.wallet.beginCall(userId,{requestId,fingerprint,model:body.model});
     if((this.active.get(userId)||0)>=2)throw problem(429,'最多同时进行两个平台模型调用');
     this.active.set(userId,(this.active.get(userId)||0)+1);
     let hold;
     try{
-      const pricing=await this.pricing(body.model,provider);
-      const amountMicros=maximumCharge({input:pricing.maxInputMicrosPerMillion,output:pricing.maxOutputMicrosPerMillion,bytes:Buffer.byteLength(encoded),tokens:maxTokens});
-      hold=this.wallet.reserve(userId,{requestId,fingerprint,model:body.model,amountMicros});if(hold.replayed)return hold;
+      hold=this.wallet.beginCall(userId,{requestId,fingerprint,model:body.model});if(hold.replayed)return hold;
       const cancellation=signal?AbortSignal.any([signal,AbortSignal.timeout(300000)]):AbortSignal.timeout(300000);
       cancellation.throwIfAborted();
       const response=await this.request(provider.baseUrl+'/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+provider.apiKey},body:encoded,signal:cancellation});
-      if(!response.ok)throw problem(502,'上游模型请求失败，请检查 Key、模型权限或稍后重试');
+      if(!response.ok){
+        await response.body?.cancel();
+        if(response.status===402)throw Object.assign(problem(502,'上游账户余额不足或上游额度受限，请管理员在后台查询上游余额'),{code:'upstream_balance_insufficient'});
+        throw problem(502,[401,403].includes(response.status)?'上游 Key 无效或没有此模型的调用权限，请管理员检查上游配置':'上游模型请求失败，请稍后重试');
+      }
       const text=await boundedText(response,8*1024*1024);cancellation.throwIfAborted();
       const parsed=parsePaidStream(text,body.model);
       const outcome=this.wallet.settle(userId,hold.id,{cost:parsed.cost,currency:'CNY',usage:parsed.response.usage,response:parsed.response});

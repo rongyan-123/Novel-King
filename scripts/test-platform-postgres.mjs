@@ -39,8 +39,23 @@ test('real PostgreSQL shared wallet grants once across clients, holds are intege
     const one=new PlatformRelay(wallet,vault,{request}),two=new PlatformRelay(other,vault,{request}),body={model:'deepseek-v4-flash',messages:[{role:'user',content:'hello'}],max_tokens:16384};
     const running=one.complete('alice',body,{requestId:'first'});
     await new Promise(resolve=>setTimeout(resolve,20));
-    await assert.rejects(()=>two.complete('alice',body,{requestId:'second'}),/不足/);
-    release();assert.equal((await running).response.novelking_billing.chargedMicros,460);
+    try {await assert.rejects(()=>two.complete('alice',body,{requestId:'second'}),error=>error.status===429&&/结算/.test(error.message));}
+    finally {release();}
+    assert.equal((await running).response.novelking_billing.chargedMicros,460);
     assert.equal(other.wallet('alice').balanceMicros,99540);assert.equal(other.wallet('alice').heldMicros,0);
   }finally{second?.close();if(!/^nk_test_platform_[a-f0-9]{32}$/.test(schema))throw Error('Invalid cleanup schema');first.exec(`DROP SCHEMA "${schema}" CASCADE`);first.close();}
+});
+
+test('PostgreSQL migrates the old wallet check, persists postpaid debt and preserves receipts on restart',{skip:!process.env.NOVELKING_TEST_DATABASE_URL},()=>{
+  const schema='nk_test_postpaid_'+randomUUID().replaceAll('-',''),database=new PostgresDatabase(process.env.NOVELKING_TEST_DATABASE_URL,schema);
+  try {
+    database.exec("CREATE TABLE users(id TEXT PRIMARY KEY,role TEXT,disabled INTEGER);INSERT INTO users VALUES('alice','user',0);CREATE TABLE platform_wallets(user_id TEXT PRIMARY KEY REFERENCES users(id),balance_micros INTEGER NOT NULL CHECK(balance_micros BETWEEN 0 AND 9000000000000000));INSERT INTO platform_wallets VALUES('alice',1)");
+    const wallet=new PlatformStore(database),call=wallet.beginCall('alice',{requestId:'postpaid',fingerprint:'f',model:'deepseek-v4-flash'});
+    const paid=wallet.settle('alice',call.id,{cost:'0.00023',currency:'CNY',usage:{prompt_tokens:12,completion_tokens:31},response:{}});
+    assert.equal(paid.chargedMicros,460);assert.equal(paid.balanceMicros,-459);
+    const restarted=new PlatformStore(database);assert.equal(restarted.wallet('alice').balanceMicros,-459);
+    assert.equal(restarted.beginCall('alice',{requestId:'postpaid',fingerprint:'f',model:'deepseek-v4-flash'}).replayed,true);
+    assert.throws(()=>restarted.beginCall('alice',{requestId:'next',fingerprint:'g',model:'deepseek-v4-flash'}),error=>error.status===402);
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM platform_ledger WHERE kind='usage'").get().count,1);
+  }finally{if(!/^nk_test_postpaid_[a-f0-9]{32}$/.test(schema))throw Error('Invalid cleanup schema');database.exec(`DROP SCHEMA "${schema}" CASCADE`);database.close();}
 });

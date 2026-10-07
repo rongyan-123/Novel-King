@@ -131,7 +131,8 @@ export async function createAccountServer(env = process.env, {platformRequest} =
       if (res.headersSent) return res.destroy();
       if (error.status === 429) res.setHeader('Retry-After', String(error.retryAfter || 5));
       if (!error.status) console.error('账户服务请求失败：', error.message);
-      send(res, error.status || 500, { error: error.status ? error.message : '服务器暂时无法完成请求' });
+      const message=error.status ? error.message : '服务器暂时无法完成请求';
+      send(res, error.status || 500, { error: req.url.startsWith('/internal/platform/') ? {message,code:error.code||'platform_request_failed'} : message });
     }
   });
   server.requestTimeout = 30000; server.headersTimeout = 15000;

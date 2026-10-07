@@ -5,6 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import {createServer} from 'node:http';
 import {createAccountServer} from '../account-server.mjs';
+import {createWorkerPlatformConfigs} from '../platform/worker-config.mjs';
+import {DatabaseSync} from 'node:sqlite';
+import {runResearchAgent} from '../ai/research/dsh.mjs';
 let app,origin,admin,user;const password='Fixture-password-2026',directory=fs.mkdtempSync(path.join(os.tmpdir(),'nk-platform-http-'));
 let modelCalls=0;
 async function request(route,{method='GET',body,cookie=user}={}) {
@@ -14,6 +17,7 @@ async function request(route,{method='GET',body,cookie=user}={}) {
 before(async()=>{
   const listener=createServer();await new Promise(resolve=>listener.listen(0,'127.0.0.1',resolve));const port=listener.address().port;await new Promise(resolve=>listener.close(resolve));origin='http://127.0.0.1:'+port;
   app=await createAccountServer({PORT:String(port),NOVELKING_PUBLIC_ORIGIN:origin,NOVELKING_ACCOUNT_ROOT:directory,NOVELKING_ADMIN_USER:'owner',NOVELKING_ADMIN_PASSWORD:password},{platformRequest:async(url,options)=>{
+    if(url.endsWith('/skills/balance'))return Response.json({available_balance:'$1.181264',currency:'USD',api_key:'fixture-private-upstream-key'});
     if(url.endsWith('/models'))return Response.json({data:[{id:'deepseek-v4-flash'}]});
     if(url.includes('/pricing'))return Response.json({channel_groups:[{vendor:'fixture',is_active:true,user_price_per_million_input_rmb:'0.8',user_price_per_million_output_rmb:'1.6',stats_source:'unknown'}]});
     modelCalls++;
@@ -23,6 +27,22 @@ before(async()=>{
   admin=(await request('/api/account/login',{method:'POST',body:{username:'owner',password},cookie:''})).cookie;
   const challenge=(await request('/api/account/challenge',{cookie:''})).body,[left,operator,right]=challenge.question.split(' ');
   user=(await request('/api/account/register',{method:'POST',body:{username:'alice',password,challenge_id:challenge.id,answer:operator==='+'?Number(left)+Number(right):Number(left)*Number(right)},cookie:''})).cookie;
+});
+
+test('worker restart repairs legacy platform model rewrites and preserves personal model configurations',()=>{
+  const db=new DatabaseSync(':memory:');
+  try {
+    db.exec('CREATE TABLE api_configs(id INTEGER PRIMARY KEY,name TEXT,base_url TEXT,api_key TEXT,model TEXT,temperature REAL,max_tokens INTEGER)');
+    const environment={NOVELKING_PLATFORM_URL:'http://127.0.0.1/internal/v1',NOVELKING_WORKER_TOKEN:'fixture-worker'};
+    createWorkerPlatformConfigs(db,environment);
+    const original=db.prepare("SELECT config_id FROM worker_platform_models WHERE model='deepseek-v4-pro'").get().config_id;
+    db.prepare("UPDATE api_configs SET model='deepseek-flash' WHERE id=?").run(original);
+    db.prepare("INSERT INTO api_configs(name,model) VALUES('Personal','my-model')").run();
+    const configs=createWorkerPlatformConfigs(db,environment);
+    assert.equal(configs.resolve(db.prepare('SELECT * FROM api_configs WHERE id=?').get(original)).model,'deepseek-v4-pro');
+    assert.equal(db.prepare("SELECT model FROM api_configs WHERE name='Personal'").get().model,'my-model');
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM worker_platform_models').get().count,9);
+  } finally {db.close();}
 });
 after(async()=>{const exited=[...app.workers.workers.values()].map(worker=>new Promise(resolve=>worker.child?.once('exit',resolve)));app?.close();await Promise.all(exited);fs.rmSync(directory,{recursive:true,force:true});});
 test('platform administration requires admin role, password and never returns private keys',async()=>{
@@ -37,6 +57,15 @@ test('platform administration requires admin role, password and never returns pr
   assert.equal(modelCalls,0);
   assert.equal((await request('/api/platform/wallet')).body.balanceMicros,100000);
 });
+test('only administrators can query upstream balance; querying it does not charge a model call',async()=>{
+  const beforeCalls=modelCalls;
+  assert.equal((await request('/api/platform/admin/upstream-balance')).status,403);
+  assert.equal((await request('/api/platform/admin/upstream-balance',{cookie:''})).status,401);
+  const balance=await request('/api/platform/admin/upstream-balance?refresh=1',{cookie:admin});
+  assert.equal(balance.status,200);assert.equal(balance.body.availableBalance,'1.181264');assert.equal(balance.body.currency,'USD');
+  assert.doesNotMatch(JSON.stringify(balance.body),/fixture-private-upstream-key/);assert.equal(modelCalls,beforeCalls);
+});
+
 test('existing model selection, writing and DSH use the platform relay without exposing upstream key or changing personal config behavior',async()=>{
   const response=await request('/api/api_configs');assert.equal(response.status,200);
   const config=response.body.find(entry=>entry.access_mode==='platform'&&entry.model==='deepseek-v4-flash');assert.ok(config);
@@ -99,4 +128,14 @@ test('replaying a streamed tool call preserves OpenAI tool indexes and bills onl
   for(let index=0;index<2;index++){const frames=await streamed(),tool=frames.flatMap(frame=>frame.choices?.[0]?.delta.tool_calls||[])[0];assert.equal(tool.index,0);assert.equal(tool.function.name,'lookup');}
   assert.equal(modelCalls,beforeCalls+1);
   assert.equal((await request('/api/platform/wallet')).body.balanceMicros,98620);
+});
+
+
+test('DSH receives a readable local-wallet error instead of an unexplained HTTP 402',async()=>{
+  await request('/api/api_configs');
+  const alice=(await request('/api/platform/admin/users?search=alice',{cookie:admin})).body.users[0],worker=app.workers.workers.get(alice.id);
+  const beforeCalls=modelCalls;
+  app.store.db.prepare('UPDATE platform_wallets SET balance_micros=0 WHERE user_id=?').run(alice.id);
+  await assert.rejects(()=>runResearchAgent({config:{base_url:origin+'/internal/platform/'+alice.id+'/v1',api_key:worker.token,model:'deepseek-v4-flash',max_tokens:256},persona:'Test',prompt:'Hello'}),/平台额度不足/);
+  assert.equal(modelCalls,beforeCalls);
 });

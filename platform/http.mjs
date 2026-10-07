@@ -86,6 +86,7 @@ export function createPlatformSystem({accountStore,root,env,request}) {
           pendingTopups:db.prepare("SELECT COUNT(*) AS count FROM platform_topups WHERE status='awaiting_review'").get().count,walletBalanceMicros:db.prepare('SELECT COALESCE(SUM(balance_micros),0) AS amount FROM platform_wallets').get().amount,
           modelCalls:db.prepare("SELECT COUNT(*) AS count FROM platform_calls WHERE status='settled'").get().count,consumedMicros:db.prepare('SELECT COALESCE(SUM(charged_micros),0) AS amount FROM platform_calls').get().amount});
         if(action==='providers')return sendPlatform(res,200,{providers:vault.list()});
+        if(action==='upstream-balance')return sendPlatform(res,200,await relay.balanceStatus({refresh:url.searchParams.get('refresh')==='1'}));
         if(action==='model-policy')return sendPlatform(res,200,{models:administration.modelPolicy(),catalogue:MODEL_CATALOG});
         if(['users','ledger','topups','requests','audit','feedback','announcements','invitations'].includes(action))return sendPlatform(res,200,administration.list(action,url));
         if(action==='channels')return sendPlatform(res,200,{channels:recharge.listChannels().map(channel=>({...channel,imageData:db.prepare('SELECT image_data FROM platform_qr WHERE id=?').get(channel.qr_id).image_data}))});

@@ -46,3 +46,34 @@ test('success settles exactly once, retries replay results, fees cap at quote an
 test('disabling an account during generation must still release the abandoned hold',()=>{
   const store=fixture();try{const hold=store.reserve('alice',{requestId:'disabled',fingerprint:'d',model:'m',amountMicros:80000});store.db.prepare('UPDATE users SET disabled=1 WHERE id=?').run('alice');store.release('alice',hold.id,'disabled');store.db.prepare('UPDATE users SET disabled=0 WHERE id=?').run('alice');assert.equal(store.wallet('alice').heldMicros,0);assert.equal(store.wallet('alice').balanceMicros,100000);}finally{store.db.close();}
 });
+
+test('postpaid calls settle the whole bill once, persist debt, block parallel calls and resume only after debt is covered',()=>{
+  const store=fixture();
+  try {
+    const call=store.beginCall('alice',{requestId:'postpaid',fingerprint:'same',model:'m'});
+    assert.throws(()=>store.beginCall('alice',{requestId:'parallel',fingerprint:'other',model:'m'}),error=>error.status===429);
+    const paid=store.settle('alice',call.id,{cost:'0.08',currency:'CNY',usage:{prompt_tokens:1,completion_tokens:1},response:{}});
+    assert.equal(paid.chargedMicros,160000);assert.equal(paid.balanceMicros,-60000);assert.equal(paid.capped,false);
+    assert.equal(store.beginCall('alice',{requestId:'postpaid',fingerprint:'same',model:'m'}).replayed,true);
+    assert.equal(store.wallet('alice').ledger.filter(row=>row.kind==='usage').length,1);
+    assert.throws(()=>store.beginCall('alice',{requestId:'empty',fingerprint:'same',model:'m'}),error=>error.status===402&&/平台额度/.test(error.message));
+    assert.equal(store.adjust('admin','alice',{requestId:'partial',amountFen:1,note:'部分补款'}).balanceMicros,-50000);
+    assert.equal(new PlatformStore(store.db).wallet('alice').balanceMicros,-50000);
+    store.adjust('admin','alice',{requestId:'replenish',amountFen:10,note:'补足欠费'});
+    const retry=store.beginCall('alice',{requestId:'new-call',fingerprint:'other',model:'m'});
+    store.release('alice',retry.id,'cancelled');assert.equal(store.wallet('alice').balanceMicros,50000);
+  } finally {store.db.close();}
+});
+
+test('existing nonnegative wallet schema migrates without losing balances, ledger or legacy calls',()=>{
+  const db=new DatabaseSync(':memory:');
+  db.exec("CREATE TABLE users(id TEXT PRIMARY KEY,username TEXT,role TEXT,disabled INTEGER DEFAULT 0,created_at TEXT);INSERT INTO users VALUES('alice','alice','user',0,'2026-10-07');CREATE TABLE platform_wallets(user_id TEXT PRIMARY KEY REFERENCES users(id),balance_micros INTEGER NOT NULL CHECK(balance_micros BETWEEN 0 AND 9000000000000000));INSERT INTO platform_wallets VALUES('alice',7)");
+  const store=new PlatformStore(db);
+  try {
+    assert.equal(store.wallet('alice').balanceMicros,7);
+    const call=store.beginCall('alice',{requestId:'migrated',fingerprint:'f',model:'m'});
+    store.settle('alice',call.id,{cost:'0.00023',currency:'CNY',usage:{prompt_tokens:1,completion_tokens:1},response:{}});
+    assert.equal(new PlatformStore(db).wallet('alice').balanceMicros,-453);
+    assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
+  } finally {db.close();}
+});
