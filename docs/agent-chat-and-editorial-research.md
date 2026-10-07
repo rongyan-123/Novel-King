@@ -47,3 +47,5 @@
 沿用 Linux 的 `novelking` Compose 项目与 PostgreSQL、文件、证书卷。发布前完整备份在 `/opt/novel-king/backups/public-20261007_165052/`，数据库 dump、上传原件、平台主密钥、证书、配置和源码 bundle 共 16 项校验通过。只更新应用镜像，资源上限和其他服务保持原配置。
 
 具体入口与迁移说明见 [Linux 部署记录](linux-laptop-deployment-2026-10-07.md)。应用、PostgreSQL、榜单浏览器、HTTPS 网关的 Docker 内存上限合计 2912 MiB；加上两项原生网络服务为 3008 MiB。恢复时数据库与文件/主密钥必须成对恢复，不删除原有卷。
+
+已部署应用镜像 `novelking-app:70e1f9e`。公网原账号、14 个原有接口、桌面/手机交互及限速启动验收通过；新增空会话也经真实 PostgreSQL 查询确认落盘，验收后已删除。临时演示容器、专用浏览器和转发已停止并清理。

@@ -20,6 +20,7 @@
 - 不操作 MapFlow 服务，不重启共享 Docker，不做全局 prune 或删除已有数据卷。
 - 详细记录见 `docs/linux-laptop-deployment-2026-10-07.md`。
 - Agent 聊天首页与编辑研究见 `docs/agent-chat-and-editorial-research.md`；发布前完整备份为 `/opt/novel-king/backups/public-20261007_165052/`。演示验收使用隔离测试模型，生产上游 Key 由用户后续填写。
+- 当前应用镜像 `novelking-app:70e1f9e`，源码提交 `70e1f9e`；AI 聊天为默认首页，公网桌面/手机、原账户和 14 个数据接口验收已通过。部署只更新本项目应用容器。
 
 ## 本机保留实例
 
